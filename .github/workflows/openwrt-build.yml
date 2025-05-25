@@ -13,7 +13,7 @@ env:
   REPO_URL: https://github.com/pesa1234/openwrt.git
   REPO_BRANCH: next-r4.5.36.rss.mtk
   OpenWRTDevice: Flint2_GL-MT6000
-  CONFIG_FILE: .config
+  CONFIG_FILE: config.openwrt-custom-master
   TZ: Europe/Kyiv
 
 
@@ -24,6 +24,14 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@main
+
+    - name: Free up disk space
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo apt-get clean
+        df -h
 
 
     - name: Set up OpenWrt Environment
