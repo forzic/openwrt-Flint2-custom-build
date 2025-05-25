@@ -1,10 +1,14 @@
-name: Build AX6000 Firmware
+name: Build ImmortalWRT Firmware
 
 on:
   workflow_dispatch:
 
 env:
-  TZ: Asia/Shanghai
+  REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-24.10.git
+  REPO_BRANCH: 2410
+  ImmortalWRTDevice: Flint2_GL-MT6000
+  CONFIG_FILE: config.immortalwrt-padavanonly
+  TZ: Europe/Kyiv
 
 jobs:
   build:
@@ -25,11 +29,11 @@ jobs:
           sudo chown $USER:$GROUPS /workdir
           df -h
 
-      - name: Set up OpenWrt Environment
+      - name: Set up ImmortalWrt Environment
         working-directory: /workdir
         run: |
           df -hT $PWD
-          git clone --branch 2410 https://github.com/padavanonly/immortalwrt-mt798x-24.10.git
+          git clone --branch $REPO_BRANCH $REPO_URL
           ln -sf /workdir/immortalwrt-mt798x-24.10 $GITHUB_WORKSPACE/immortalwrt-mt798x-24.10
 
 
@@ -47,7 +51,7 @@ jobs:
 
       - name: Configure Firmware
         run: |
-          cp config.immortalwrt-padavanonly immortalwrt-mt798x-24.10/.config
+          cp $CONFIG_FILE immortalwrt-mt798x-24.10/.config
 
           cd immortalwrt-mt798x-24.10
           perl --version
@@ -69,17 +73,40 @@ jobs:
           echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
 
-      - name: Upload Firmware
-        uses: actions/upload-artifact@v4
-        with:
-          name: immortalwrt-mt7986-mt60000
-          path: bin/targets/mediatek/mt7986/
+      - name: Organize files
+        id: organize
+        run: |
+          cd immortalwrt-mt798x-24.10/bin/targets/*/*
+          rm -rf packages
+          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+          echo "NOW=$(date +%F-%H%M)" >> $GITHUB_ENV
+          cp $PWD/version.buildinfo $GITHUB_WORKSPACE/version.buildinfo
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        if: success()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract version information from version.buildinfo
+        run: >-
+          echo "BUILDINFO=$(cat $PWD/version.buildinfo)"
+          >> $GITHUB_ENV
+
+      - name: build RelTag
+        id: BuildRelTag
+        run: |
+          echo "RelTag=${{ env.NOW }}_Pre_${{ env.ImmortalWRTDevice }}_@(${{ env.BUILDINFO }})" >> $GITHUB_ENV
+
+      - name: Upload firmware to github
+        uses: actions/upload-artifact@main
         with:
-          tag_name: ax6000-build-${{ github.run_number }}
-          files: bin/targets/mediatek/mt7986/*
+          name: ImmortalWrt_firmware-${{ env.ImmortalWRTDevice }}-${{ env.NOW }}
+          path: ${{ env.FIRMWARE }}
+
+      - name: Create a release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: True
+          title: "${{ env.RelTag }}"
+          automatic_release_tag: "${{ env.BUILDINFO }}"
+          files: |
+            ${{ env.FIRMWARE }}/*sysupgrade.bin
+            ${{ env.FIRMWARE }}/*.buildinfo
+            ${{ env.FIRMWARE }}/*.manifest
+            ${{ env.FIRMWARE }}/sha256sums
