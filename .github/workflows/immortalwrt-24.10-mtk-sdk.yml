@@ -49,6 +49,7 @@ jobs:
         run: |
           cp config.immortalwrt-padavanonly immortalwrt-mt798x-24.10/.config
 
+          cd immortalwrt-mt798x-24.10
           perl --version
           ls -la target/linux/mediatek/
           cat target/linux/mediatek/Makefile | grep KERNEL
