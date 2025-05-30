@@ -63,26 +63,23 @@ jobs:
           cd immortalwrt-mt798x-24.10
           
           # Extract ImmortalWRT version from the source
-          # This gets the version from the main Makefile or version files
+          IMMORTALWRT_VERSION=""
           if [ -f "package/base-files/files/etc/openwrt_release" ]; then
             IMMORTALWRT_VERSION=$(grep "DISTRIB_RELEASE=" package/base-files/files/etc/openwrt_release | cut -d"'" -f2 | head -1)
           elif [ -f "include/version.mk" ]; then
             IMMORTALWRT_VERSION=$(grep "VERSION_NUMBER:=" include/version.mk | cut -d= -f2 | tr -d ' ')
           else
-            # Fallback: extract from git tag or use branch name
             IMMORTALWRT_VERSION=$(git describe --tags --always 2>/dev/null || echo "$REPO_BRANCH")
           fi
           
           # Extract kernel version from target configuration
-          # This searches through the target makefiles to find kernel version
+          KERNEL_VERSION=""
           KERNEL_VERSION=$(find target/linux -name "Makefile" -exec grep "KERNEL_PATCHVER:=" {} \; | head -1 | cut -d= -f2 | tr -d ' ')
           
-          # If we can't find it in target makefiles, try the main include files
           if [ -z "$KERNEL_VERSION" ]; then
-            KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
+            KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
           fi
           
-          # Fallback to a more generic search if still empty
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(find . -name "*.mk" -exec grep -h "LINUX_VERSION" {} \; | grep -E "^LINUX_VERSION" | head -1 | cut -d= -f2 | tr -d ' ')
           fi
@@ -91,17 +88,16 @@ jobs:
           IMMORTALWRT_VERSION=${IMMORTALWRT_VERSION:-"24.10-dev"}
           KERNEL_VERSION=${KERNEL_VERSION:-"5"}
           
-          # Clean up version strings (remove any unwanted characters)
+          # Clean up version strings
           IMMORTALWRT_VERSION=$(echo "$IMMORTALWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
           KERNEL_VERSION=$(echo "$KERNEL_VERSION" | sed 's/[^0-9.]//g')
           
-          # Export to environment for use in later steps
+          # Export to environment
           echo "IMMORTALWRT_VERSION=$IMMORTALWRT_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
           
-          # Log the extracted versions for debugging
-          echo "📋 Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
-          echo "📋 Extracted Kernel Version: $KERNEL_VERSION"
+          echo "Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
+          echo "Extracted Kernel Version: $KERNEL_VERSION"
           
       - name: Download Sources
         run: |
@@ -118,128 +114,72 @@ jobs:
           
       - name: Deploy and archive packages
         run: |
-          ls immortalwrt-mt798x-24.10/bin/targets/*/*
           cd immortalwrt-mt798x-24.10/bin/targets/*/*
           
-          # Check if packages directory exists from the build
           if [ -d "packages" ]; then
-            echo "📦 Found packages directory, processing..."
+            echo "Found packages directory, processing..."
             
-            # Count packages for logging
             PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
             echo "Found $PACKAGE_COUNT .ipk packages"
             
-            # Setup Git configuration for committing to current repo
             git config --global user.name 'OpenWRT Build Bot'
             git config --global user.email 'actions@github.com'
             
-            # Go back to the workspace root (current repository)
             cd $GITHUB_WORKSPACE
             
-            # Create a versioned packages output directory name
-            # Format: packages-output-immortalwrt-{version}-kernel-{kernel_version}
+            # Create versioned directory name
             PACKAGES_DIR_NAME="packages-output-immortalwrt-${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
             
-            # Remove any existing packages-output directories to keep it fresh
             rm -rf packages-output*
-            
-            # Copy the entire packages directory to our versioned directory
             cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages "$PACKAGES_DIR_NAME"
-            
-            # Also create a symlink with the simple name for backward compatibility
             ln -sf "$PACKAGES_DIR_NAME" packages-output
             
-            # Create a comprehensive README file with all version information
-            cat > "$PACKAGES_DIR_NAME/README.md" << EOF
-# ImmortalWRT Packages - ${{ env.ImmortalWRTDevice }}
-
-**Generated on:** $(date -u)  
-**Device:** ${{ env.ImmortalWRTDevice }}  
-**ImmortalWRT Version:** ${{ env.IMMORTALWRT_VERSION }}  
-**Kernel Version:** ${{ env.KERNEL_VERSION }}  
-**Source Branch:** ${{ env.REPO_BRANCH }}  
-**Total Packages:** $PACKAGE_COUNT  
-
-## Version Information
-- **ImmortalWRT Release:** ${{ env.IMMORTALWRT_VERSION }}
-- **Linux Kernel:** ${{ env.KERNEL_VERSION }}
-- **Target Device:** ${{ env.ImmortalWRTDevice }}
-- **Build Branch:** ${{ env.REPO_BRANCH }}
-- **Build Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-
-## About
-These are the compiled .ipk packages from the ImmortalWRT build process. Each package can be installed individually on compatible OpenWRT/ImmortalWRT systems running similar versions.
-
-**Compatibility Note:** These packages are specifically built for ImmortalWRT ${{ env.IMMORTALWRT_VERSION }} with kernel ${{ env.KERNEL_VERSION }}. While many packages may work across different versions, it's recommended to use packages built for your exact firmware version when possible.
-
-## Installation
-To install packages from this collection:
-\`\`\`bash
-# Copy .ipk files to your router and install with opkg
-opkg install package-name.ipk
-\`\`\`
-
-## Package List
-EOF
+            # Create README with version info
+            cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
+          # ImmortalWRT Packages
+          
+          **Generated on:** $(date -u)
+          **Device:** ${{ env.ImmortalWRTDevice }}
+          **ImmortalWRT Version:** ${{ env.IMMORTALWRT_VERSION }}
+          **Kernel Version:** ${{ env.KERNEL_VERSION }}
+          **Source Branch:** ${{ env.REPO_BRANCH }}
+          
+          ## Package List
+          EOF
             
-            # Add each package to the README with size information and organize by category
-            echo "### Core Packages" >> "$PACKAGES_DIR_NAME/README.md"
-            find "$PACKAGES_DIR_NAME" -name "*.ipk" -type f | grep -E "(base|kernel|libc)" | sort | while read -r pkg; do
-              PKG_NAME=$(basename "$pkg")
-              PKG_SIZE=$(du -h "$pkg" | cut -f1)
-              echo "- \`$PKG_NAME\` ($PKG_SIZE)" >> "$PACKAGES_DIR_NAME/README.md"
-            done
-            
-            echo "" >> "$PACKAGES_DIR_NAME/README.md"
-            echo "### All Packages" >> "$PACKAGES_DIR_NAME/README.md"
+            # Add package list to README
             find "$PACKAGES_DIR_NAME" -name "*.ipk" -type f | sort | while read -r pkg; do
               PKG_NAME=$(basename "$pkg")
               PKG_SIZE=$(du -h "$pkg" | cut -f1)
-              echo "- \`$PKG_NAME\` ($PKG_SIZE)" >> "$PACKAGES_DIR_NAME/README.md"
+              echo "- $PKG_NAME ($PKG_SIZE)" >> "$PACKAGES_DIR_NAME/README.md"
             done
             
-            # Add the versioned packages directory to git and commit
             git add "$PACKAGES_DIR_NAME/"
-            git add packages-output  # Add the symlink too
+            git add packages-output
             
-            # Only commit if there are actually changes
             if ! git diff --staged --quiet; then
-              git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - ImmortalWRT ${{ env.IMMORTALWRT_VERSION }} / Kernel ${{ env.KERNEL_VERSION }}
-
-Generated: $(date -u)
-Device: ${{ env.ImmortalWRTDevice }}
-ImmortalWRT Version: ${{ env.IMMORTALWRT_VERSION }}
-Kernel Version: ${{ env.KERNEL_VERSION }}
-Branch: ${{ env.REPO_BRANCH }}"
-              
-              # Push the changes back to the current repository
+              git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - ImmortalWRT ${IMMORTALWRT_VERSION} / Kernel ${KERNEL_VERSION}"
               git push origin ${{ github.ref_name }}
-              echo "✅ Successfully deployed $PACKAGE_COUNT packages to $PACKAGES_DIR_NAME/ directory"
+              echo "Successfully deployed $PACKAGE_COUNT packages"
             else
-              echo "ℹ️ No changes detected in packages"
+              echo "No changes detected in packages"
             fi
             
-            # Now create an archive for the release (back in build directory)
+            # Create archive
             cd immortalwrt-mt798x-24.10/bin/targets/*/*
-            
-            # Create timestamped archive name with version information
             TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-            PACKAGES_ARCHIVE="immortalwrt-packages-${TIMESTAMP}-v${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}.tar.gz"
-            
-            # Create the compressed archive
+            PACKAGES_ARCHIVE="immortalwrt-packages-${TIMESTAMP}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
             tar -czf "$PACKAGES_ARCHIVE" packages/
             
-            # Set environment variables for later steps
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
             echo "PACKAGES_CREATED=true" >> $GITHUB_ENV
             echo "PACKAGE_COUNT=$PACKAGE_COUNT" >> $GITHUB_ENV
             echo "PACKAGES_DIR_NAME=$PACKAGES_DIR_NAME" >> $GITHUB_ENV
             
-            echo "✅ Created archive: $PACKAGES_ARCHIVE"
-            echo "📊 Archive size: $(du -h "$PACKAGES_ARCHIVE" | cut -f1)"
+            echo "Created archive: $PACKAGES_ARCHIVE"
             
           else
-            echo "⚠️ No packages directory found in build output"
+            echo "No packages directory found in build output"
             echo "PACKAGES_CREATED=false" >> $GITHUB_ENV
           fi
           
@@ -247,11 +187,7 @@ Branch: ${{ env.REPO_BRANCH }}"
         id: organize
         run: |
           cd immortalwrt-mt798x-24.10/bin/targets/*/*
-          
-          # Now remove the packages directory since we've already processed it
           rm -rf packages
-          
-          # Set environment variables for the firmware location and timestamp
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "NOW=$(date +%F-%H%M)" >> $GITHUB_ENV
           cp $PWD/version.buildinfo $GITHUB_WORKSPACE/version.buildinfo
@@ -263,8 +199,7 @@ Branch: ${{ env.REPO_BRANCH }}"
       - name: Build RelTag
         id: BuildRelTag
         run: |
-          # Enhanced release tag with version information
-          echo "RelTag=${{ env.NOW }}_ImmortalWRT-${{ env.IMMORTALWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.ImmortalWRTDevice }}_@(${{ env.BUILDINFO }})" >> $GITHUB_ENV
+          echo "RelTag=${{ env.NOW }}_ImmortalWRT-${{ env.IMMORTALWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.ImmortalWRTDevice }}" >> $GITHUB_ENV
           
       - name: Upload firmware to github
         uses: actions/upload-artifact@main
