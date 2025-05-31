@@ -13,6 +13,10 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write  # Needed to push commits and create releases
+      actions: read    # Needed to read workflow artifacts
+      packages: read
     
     steps:
       - name: Checkout
@@ -74,7 +78,7 @@ jobs:
           
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
-          KERNEL_VERSION=$(find target/linux -name "Makefile" -exec grep "KERNEL_PATCHVER:=" {} \; | head -1 | cut -d= -f2 | tr -d ' ')
+          KERNEL_VERSION=$(cat target/linux/mediatek/Makefile | grep KERNEL | head -1 | cut -d= -f2 | tr -d ' ')
           
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
@@ -102,7 +106,7 @@ jobs:
       - name: Download Sources
         run: |
           cd immortalwrt-mt798x-24.10
-          make download -j8
+          make download -j$(nproc)
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
           
@@ -114,6 +118,7 @@ jobs:
           
       - name: Deploy and archive packages
         run: |
+          ls immortalwrt-mt798x-24.10/bin/targets/*/*
           cd immortalwrt-mt798x-24.10/bin/targets/*/*
           
           if [ -d "packages" ]; then
