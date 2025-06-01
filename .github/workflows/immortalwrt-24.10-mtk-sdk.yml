@@ -89,14 +89,7 @@ jobs:
           cd immortalwrt-mt798x-24.10
           
           # Extract ImmortalWRT version from the source
-          IMMORTALWRT_VERSION=""
-          if [ -f "package/base-files/files/etc/openwrt_release" ]; then
-            IMMORTALWRT_VERSION=$(grep "DISTRIB_RELEASE=" package/base-files/files/etc/openwrt_release | cut -d"'" -f2 | head -1)
-          elif [ -f "include/version.mk" ]; then
-            IMMORTALWRT_VERSION=$(grep "VERSION_NUMBER:=" include/version.mk | cut -d= -f2 | tr -d ' ')
-          else
-            IMMORTALWRT_VERSION=$(git describe --tags --always 2>/dev/null || echo "$REPO_BRANCH")
-          fi
+          IMMORTALWRT_VERSION="24.10-SNAPSHOT"
           
           # Extract kernel version from target configuration
           KERNEL_VERSION=""

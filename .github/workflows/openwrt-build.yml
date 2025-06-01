@@ -97,14 +97,7 @@ jobs:
           cd openwrt
           
           # Extract OpenWRT version from the source
-          OpenWRT_VERSION=""
-          if [ -f "package/base-files/files/etc/openwrt_release" ]; then
-            OpenWRT_VERSION=$(grep "DISTRIB_RELEASE=" package/base-files/files/etc/openwrt_release | cut -d"'" -f2 | head -1)
-          elif [ -f "include/version.mk" ]; then
-            OpenWRT_VERSION=$(grep "VERSION_NUMBER:=" include/version.mk | cut -d= -f2 | tr -d ' ')
-          else
-            OpenWRT_VERSION=$(git describe --tags --always 2>/dev/null || echo "$REPO_BRANCH")
-          fi
+          OpenWRT_VERSION="SNAPSHOT"
           
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
