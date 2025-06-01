@@ -20,32 +20,31 @@ jobs:
       contents: write  # Needed to push commits and create releases
       actions: read    # Needed to read workflow artifacts
       packages: read
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@main
-        
+
       - name: Free up disk space
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo -E apt-get -qq update
-          sudo -E apt-get -qq install $(curl -fsSL git.io/depends-ubuntu-2004)
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
           sudo timedatectl set-timezone "$TZ"
           sudo mkdir -p /workdir
           sudo chown $USER:$GROUPS /workdir
           df -h
-          
+
       - name: Set up OpenWRT Environment
         working-directory: /workdir
         run: |
           df -hT $PWD
           git clone --branch $REPO_BRANCH $REPO_URL
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
-          
+
       - name: Setup Build Environment
         run: |
           sudo apt-get update
@@ -73,7 +72,7 @@ jobs:
             libpcre3 \
             libpcre3-dev \
             mold
-            
+
       - name: Display contents of .config start
         run:  |
           cat $GITHUB_WORKSPACE/$CONFIG_FILE
@@ -82,7 +81,7 @@ jobs:
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          
+
       - name: Configure Firmware
         run: |
           cp $CONFIG_FILE openwrt/.config
@@ -91,100 +90,100 @@ jobs:
           cat target/linux/mediatek/Makefile | grep KERNEL
           head -n 200 scripts/kconfig.pl
           make defconfig
-          
+
       - name: Extract Version Information
         run: |
           cd openwrt
-          
+
           # Extract OpenWRT version from the source
           OpenWRT_VERSION="SNAPSHOT"
-          
+
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
           KERNEL_VERSION=$(cat target/linux/mediatek/Makefile | grep KERNEL | head -1 | cut -d= -f2 | tr -d ' ')
-          
+
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
           fi
-          
+
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(find . -name "*.mk" -exec grep -h "LINUX_VERSION" {} \; | grep -E "^LINUX_VERSION" | head -1 | cut -d= -f2 | tr -d ' ')
           fi
-          
+
           # Set default values if extraction fails
           OpenWRT_VERSION=${OpenWRT_VERSION:-"SNAPSHOT"}
           KERNEL_VERSION=${KERNEL_VERSION:-"5"}
-          
+
           # Clean up version strings
           OpenWRT_VERSION=$(echo "$OpenWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
           KERNEL_VERSION=$(echo "$KERNEL_VERSION" | sed 's/[^0-9.]//g')
-          
+
           # Export to environment
           echo "OpenWRT_VERSION=$OpenWRT_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
-          
+
           echo "Extracted OpenWRT Version: $OpenWRT_VERSION"
           echo "Extracted Kernel Version: $KERNEL_VERSION"
-          
+
       - name: Download Sources
         run: |
           cd openwrt
           make download -j$(nproc)
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
-          
+
       - name: Build Firmware
         run: |
           cd openwrt
           echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
-          
+
       - name: Deploy and archive packages
         run: |
           ls openwrt/bin/targets/*/*
           cd openwrt/bin/targets/*/*
-          
+
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
-            
+
             PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
             echo "Found $PACKAGE_COUNT .ipk packages"
-            
+
             git config --global user.name 'OpenWRT Build Bot'
             git config --global user.email 'actions@github.com'
-            
+
             cd $GITHUB_WORKSPACE
-            
+
             # Create versioned directory name
             PACKAGES_DIR_NAME="packages-output-openwrt-${OpenWRT_VERSION}-kernel-${KERNEL_VERSION}"
-            
+
             rm -rf packages-output*
             cp -r openwrt/bin/targets/*/*/packages "$PACKAGES_DIR_NAME"
             ln -sf "$PACKAGES_DIR_NAME" packages-output
-            
+
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
           # OpenWRT Packages
-          
+
           **Generated on:** $(date -u)
           **Device:** ${{ env.OpenWRTDevice }}
           **OpenWRT Version:** ${{ env.OpenWRT_VERSION }}
           **Kernel Version:** ${{ env.KERNEL_VERSION }}
           **Source Branch:** ${{ env.REPO_BRANCH }}
-          
+
           ## Package List
           EOF
-            
+
             # Add package list to README
             find "$PACKAGES_DIR_NAME" -name "*.ipk" -type f | sort | while read -r pkg; do
               PKG_NAME=$(basename "$pkg")
               PKG_SIZE=$(du -h "$pkg" | cut -f1)
               echo "- $PKG_NAME ($PKG_SIZE)" >> "$PACKAGES_DIR_NAME/README.md"
             done
-            
+
             git add "$PACKAGES_DIR_NAME/"
             git add packages-output
-            
+
             if ! git diff --staged --quiet; then
               git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - OpenWRT ${OpenWRT_VERSION} / Kernel ${KERNEL_VERSION}"
               git push origin ${{ github.ref_name }}
@@ -192,25 +191,25 @@ jobs:
             else
               echo "No changes detected in packages"
             fi
-            
+
             # Create archive
             cd openwrt/bin/targets/*/*
             TIMESTAMP=$(date +%Y%m%d_%H%M%S)
             PACKAGES_ARCHIVE="openwrt-packages-${TIMESTAMP}-v${OpenWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
             tar -czf "$PACKAGES_ARCHIVE" packages/
-            
+
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
             echo "PACKAGES_CREATED=true" >> $GITHUB_ENV
             echo "PACKAGE_COUNT=$PACKAGE_COUNT" >> $GITHUB_ENV
             echo "PACKAGES_DIR_NAME=$PACKAGES_DIR_NAME" >> $GITHUB_ENV
-            
+
             echo "Created archive: $PACKAGES_ARCHIVE"
-            
+
           else
             echo "No packages directory found in build output"
             echo "PACKAGES_CREATED=false" >> $GITHUB_ENV
           fi
-          
+
       - name: Organize files
         id: organize
         run: |
@@ -219,29 +218,29 @@ jobs:
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "NOW=$(date +%F-%H%M)" >> $GITHUB_ENV
           cp $PWD/version.buildinfo $GITHUB_WORKSPACE/version.buildinfo
-          
+
       - name: Extract version information from version.buildinfo
         run: |
           echo "BUILDINFO=$(cat $PWD/version.buildinfo)" >> $GITHUB_ENV
-          
+
       - name: Build RelTag
         id: BuildRelTag
         run: |
           echo "RelTag=${{ env.NOW }}_OpenWRT-${{ env.OpenWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.OpenWRTDevice }}" >> $GITHUB_ENV
-          
+
       - name: Upload firmware to github
         uses: actions/upload-artifact@main
         with:
           name: OpenWrt_firmware-${{ env.OpenWRTDevice }}-${{ env.OpenWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}
-          
+
       - name: Upload packages archive as artifact
         if: env.PACKAGES_CREATED == 'true'
         uses: actions/upload-artifact@main
         with:
           name: OpenWRT_packages-${{ env.OpenWRTDevice }}-${{ env.OpenWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}/${{ env.PACKAGES_ARCHIVE }}
-          
+
       - name: Create a release
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
