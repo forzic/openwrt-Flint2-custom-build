@@ -17,11 +17,11 @@ jobs:
       contents: write  # Needed to push commits and create releases
       actions: read    # Needed to read workflow artifacts
       packages: read
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@main
-        
+
       - name: Free up disk space
         run: |
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
@@ -33,14 +33,14 @@ jobs:
           sudo mkdir -p /workdir
           sudo chown $USER:$GROUPS /workdir
           df -h
-          
+
       - name: Set up ImmortalWrt Environment
         working-directory: /workdir
         run: |
           df -hT $PWD
           git clone --branch $REPO_BRANCH $REPO_URL
           ln -sf /workdir/immortalwrt-mt798x-24.10 $GITHUB_WORKSPACE/immortalwrt-mt798x-24.10
-          
+
       - name: Setup Build Environment
         run: |
           sudo apt-get update
@@ -66,15 +66,14 @@ jobs:
             wget \
             llvm \
             libpcre3 \
-            libpcre3-dev \
-            mold
-            
+            libpcre3-dev
+
       - name: Update & Install Feeds
         run: |
           cd immortalwrt-mt798x-24.10
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          
+
       - name: Configure Firmware
         run: |
           cp $CONFIG_FILE immortalwrt-mt798x-24.10/.config
@@ -83,100 +82,100 @@ jobs:
           cat target/linux/mediatek/Makefile | grep KERNEL
           head -n 200 scripts/kconfig.pl
           make defconfig
-          
+
       - name: Extract Version Information
         run: |
           cd immortalwrt-mt798x-24.10
-          
+
           # Extract ImmortalWRT version from the source
           IMMORTALWRT_VERSION="24.10-SNAPSHOT"
-          
+
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
           KERNEL_VERSION=$(cat target/linux/mediatek/Makefile | grep KERNEL | head -1 | cut -d= -f2 | tr -d ' ')
-          
+
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
           fi
-          
+
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(find . -name "*.mk" -exec grep -h "LINUX_VERSION" {} \; | grep -E "^LINUX_VERSION" | head -1 | cut -d= -f2 | tr -d ' ')
           fi
-          
+
           # Set default values if extraction fails
           IMMORTALWRT_VERSION=${IMMORTALWRT_VERSION:-"24.10-dev"}
           KERNEL_VERSION=${KERNEL_VERSION:-"5"}
-          
+
           # Clean up version strings
           IMMORTALWRT_VERSION=$(echo "$IMMORTALWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
           KERNEL_VERSION=$(echo "$KERNEL_VERSION" | sed 's/[^0-9.]//g')
-          
+
           # Export to environment
           echo "IMMORTALWRT_VERSION=$IMMORTALWRT_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
-          
+
           echo "Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
           echo "Extracted Kernel Version: $KERNEL_VERSION"
-          
+
       - name: Download Sources
         run: |
           cd immortalwrt-mt798x-24.10
           make download -j$(nproc)
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
-          
+
       - name: Build Firmware
         run: |
           cd immortalwrt-mt798x-24.10
           echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
-          
+
       - name: Deploy and archive packages
         run: |
           ls immortalwrt-mt798x-24.10/bin/targets/*/*
           cd immortalwrt-mt798x-24.10/bin/targets/*/*
-          
+
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
-            
+
             PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
             echo "Found $PACKAGE_COUNT .ipk packages"
-            
+
             git config --global user.name 'OpenWRT Build Bot'
             git config --global user.email 'actions@github.com'
-            
+
             cd $GITHUB_WORKSPACE
-            
+
             # Create versioned directory name
             PACKAGES_DIR_NAME="packages-output-immortalwrt-${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
-            
+
             rm -rf packages-output*
             cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages "$PACKAGES_DIR_NAME"
             ln -sf "$PACKAGES_DIR_NAME" packages-output
-            
+
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
           # ImmortalWRT Packages
-          
+
           **Generated on:** $(date -u)
           **Device:** ${{ env.ImmortalWRTDevice }}
           **ImmortalWRT Version:** ${{ env.IMMORTALWRT_VERSION }}
           **Kernel Version:** ${{ env.KERNEL_VERSION }}
           **Source Branch:** ${{ env.REPO_BRANCH }}
-          
+
           ## Package List
           EOF
-            
+
             # Add package list to README
             find "$PACKAGES_DIR_NAME" -name "*.ipk" -type f | sort | while read -r pkg; do
               PKG_NAME=$(basename "$pkg")
               PKG_SIZE=$(du -h "$pkg" | cut -f1)
               echo "- $PKG_NAME ($PKG_SIZE)" >> "$PACKAGES_DIR_NAME/README.md"
             done
-            
+
             git add "$PACKAGES_DIR_NAME/"
             git add packages-output
-            
+
             if ! git diff --staged --quiet; then
               git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - ImmortalWRT ${IMMORTALWRT_VERSION} / Kernel ${KERNEL_VERSION}"
               git push origin ${{ github.ref_name }}
@@ -184,25 +183,25 @@ jobs:
             else
               echo "No changes detected in packages"
             fi
-            
+
             # Create archive
             cd immortalwrt-mt798x-24.10/bin/targets/*/*
             TIMESTAMP=$(date +%Y%m%d_%H%M%S)
             PACKAGES_ARCHIVE="immortalwrt-packages-${TIMESTAMP}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
             tar -czf "$PACKAGES_ARCHIVE" packages/
-            
+
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
             echo "PACKAGES_CREATED=true" >> $GITHUB_ENV
             echo "PACKAGE_COUNT=$PACKAGE_COUNT" >> $GITHUB_ENV
             echo "PACKAGES_DIR_NAME=$PACKAGES_DIR_NAME" >> $GITHUB_ENV
-            
+
             echo "Created archive: $PACKAGES_ARCHIVE"
-            
+
           else
             echo "No packages directory found in build output"
             echo "PACKAGES_CREATED=false" >> $GITHUB_ENV
           fi
-          
+
       - name: Organize files
         id: organize
         run: |
@@ -211,29 +210,29 @@ jobs:
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "NOW=$(date +%F-%H%M)" >> $GITHUB_ENV
           cp $PWD/version.buildinfo $GITHUB_WORKSPACE/version.buildinfo
-          
+
       - name: Extract version information from version.buildinfo
         run: |
           echo "BUILDINFO=$(cat $PWD/version.buildinfo)" >> $GITHUB_ENV
-          
+
       - name: Build RelTag
         id: BuildRelTag
         run: |
           echo "RelTag=${{ env.NOW }}_ImmortalWRT-${{ env.IMMORTALWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.ImmortalWRTDevice }}" >> $GITHUB_ENV
-          
+
       - name: Upload firmware to github
         uses: actions/upload-artifact@main
         with:
           name: ImmortalWrt_firmware-${{ env.ImmortalWRTDevice }}-${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}
-          
+
       - name: Upload packages archive as artifact
         if: env.PACKAGES_CREATED == 'true'
         uses: actions/upload-artifact@main
         with:
           name: ImmortalWrt_packages-${{ env.ImmortalWRTDevice }}-${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}/${{ env.PACKAGES_ARCHIVE }}
-          
+
       - name: Create a release
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
