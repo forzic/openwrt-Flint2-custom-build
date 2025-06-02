@@ -3437,7 +3437,7 @@ CONFIG_PACKAGE_kmod-nls-utf8=y
 # Netfilter Extensions
 #
 CONFIG_PACKAGE_kmod-arptables=m
-CONFIG_PACKAGE_kmod-br-netfilter=m
+# CONFIG_PACKAGE_kmod-br-netfilter is not set
 CONFIG_PACKAGE_kmod-ebtables=y
 CONFIG_PACKAGE_kmod-ebtables-ipv4=y
 CONFIG_PACKAGE_kmod-ebtables-ipv6=y
@@ -3487,7 +3487,7 @@ CONFIG_PACKAGE_kmod-ipt-nathelper-rtsp=m
 CONFIG_PACKAGE_kmod-ipt-nflog=m
 CONFIG_PACKAGE_kmod-ipt-nfqueue=m
 CONFIG_PACKAGE_kmod-ipt-offload=y
-CONFIG_PACKAGE_kmod-ipt-physdev=m
+# CONFIG_PACKAGE_kmod-ipt-physdev is not set
 CONFIG_PACKAGE_kmod-ipt-proto=y
 CONFIG_PACKAGE_kmod-ipt-psd=m
 CONFIG_PACKAGE_kmod-ipt-quota2=m
@@ -3671,7 +3671,7 @@ CONFIG_PACKAGE_kmod-jool-netfilter=m
 CONFIG_PACKAGE_kmod-l2tp=m
 CONFIG_PACKAGE_kmod-l2tp-eth=m
 CONFIG_PACKAGE_kmod-l2tp-ip=m
-CONFIG_PACKAGE_kmod-macremapper=m
+# CONFIG_PACKAGE_kmod-macremapper is not set
 CONFIG_PACKAGE_kmod-macsec=m
 CONFIG_PACKAGE_kmod-mdio=m
 CONFIG_PACKAGE_kmod-mdio-netlink=m
