@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Your Name <your.email@example.com>
+Date: [Current Date]
+Subject: [PATCH] net: bridge: netfilter: fix nft_reject_bridge build errors
+
+Fix incorrect arguments passed to nf_reject_verify_csum() in IPv4 and IPv6
+paths. The function requires a sk_buff pointer and data offset, not a protocol.
+Also correct the IPv6 checksum calculation by using the proper offset and protocol.
+
+Signed-off-by: Your Name <your.email@example.com>
+---
+ net/bridge/netfilter/nft_reject_bridge.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/net/bridge/netfilter/nft_reject_bridge.c b/net/bridge/netfilter/nft_reject_bridge.c
+index 0123456..789abcd 100644
+--- a/net/bridge/netfilter/nft_reject_bridge.c
++++ b/net/bridge/netfilter/nft_reject_bridge.c
+@@ -131,7 +131,7 @@ static void nft_reject_br_send_v4_unreach(struct sk_buff *oldskb, int hook,
+ 	 * We are not allowed to change or move the packet
+ 	 * if the checksum is incorrect.
+ 	 */
+-	if (nf_reject_verify_csum(proto) &&
++	if (nf_reject_verify_csum(oldskb, dataoff) &&
+	    nf_ip_checksum(oldskb, hook, dataoff, 0)) {
+		/* We must not give up if the checksum is wrong because
+		 * a NAT engine might be messing around with the packets.
+@@ -234,9 +234,11 @@ static void nft_reject_br_send_v6_unreach(struct net *net, struct sk_buff *oldskb
+
+ static bool reject6_br_csum_ok(struct sk_buff *skb, int hook)
+ {
+-	u8 proto = ipv6_hdr(skb)->nexthdr;
++	const struct ipv6hdr *ip6h = ipv6_hdr(skb);
++	int dataoff = sizeof(*ip6h);
++	u8 proto = ip6h->nexthdr;
+
+-	if (!nf_reject_verify_csum(proto))
++	if (!nf_reject_verify_csum(skb, dataoff))
+		return true;
+
+-	return nf_ip6_checksum(skb, hook, dataoff, 0) == 0;
++	return nf_ip6_checksum(skb, hook, dataoff, proto) == 0;
+ }
+--
+2.34.1
