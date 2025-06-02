@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: write  # Needed to push commits and create releases
       actions: read    # Needed to read workflow artifacts
@@ -25,6 +25,7 @@ jobs:
       - name: Free up disk space
         run: |
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo docker image prune --all --force
           sudo -E apt-get -qq update
           sudo -E apt-get -qq autoremove --purge
           sudo -E apt-get -qq clean
@@ -42,8 +43,6 @@ jobs:
 
       - name: Setup Build Environment
         run: |
-          sudo add-apt-repository universe
-          sudo add-apt-repository multiverse
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
