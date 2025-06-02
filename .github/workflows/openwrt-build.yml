@@ -140,8 +140,8 @@ jobs:
 
       - name: Deploy and archive packages
         run: |
-          ls openwrt/bin/targets/*/*
-          cd openwrt/bin/targets/*/*
+          ls openwrt/bin/*/targets/*/*
+          cd openwrt/bin/*/targets/*/*
 
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
