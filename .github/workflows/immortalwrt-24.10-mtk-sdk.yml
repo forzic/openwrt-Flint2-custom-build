@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write  # Needed to push commits and create releases
       actions: read    # Needed to read workflow artifacts
