@@ -1,5 +1,5 @@
---- net/bridge/netfilter/nft_reject_bridge.c	2024-09-12 12:03:57.000000000 +0300
-+++ net/bridge/netfilter/nft_reject_bridge_diff.c	2025-06-03 01:31:09.355177100 +0300
+--- a/net/bridge/netfilter/nft_reject_bridge.c	2024-09-12 12:03:57.000000000 +0300
++++ b/net/bridge/netfilter/nft_reject_bridge.c	2025-06-03 01:31:09.355177100 +0300
 @@ -131,7 +131,7 @@
  	proto = ip_hdr(oldskb)->protocol;
  
