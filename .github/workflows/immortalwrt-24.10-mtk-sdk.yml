@@ -76,7 +76,6 @@ jobs:
 
       - name: Configure Firmware
         run: |
-          cat build_dir/host/linux-5.4.284/net/bridge/netfilter/nft_reject_bridge.c
           cp 903-fix-nft-reject-bridge.patch immortalwrt-mt798x-24.10/target/linux/generic/backport-5.4
           cp $CONFIG_FILE immortalwrt-mt798x-24.10/.config
           cd immortalwrt-mt798x-24.10
