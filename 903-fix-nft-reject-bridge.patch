@@ -1,11 +1,11 @@
 --- a/net/bridge/netfilter/nft_reject_bridge.c	2024-09-12 12:03:57.000000000 +0300
-+++ b/net/bridge/netfilter/nft_reject_bridge.c	2025-06-03 01:31:09.355177100 +0300
++++ b/net/bridge/netfilter/nft_reject_bridge.c	2025-06-03 03:14:18.619436600 +0300
 @@ -131,7 +131,7 @@
  	proto = ip_hdr(oldskb)->protocol;
  
  	if (!skb_csum_unnecessary(oldskb) &&
 -	    nf_reject_verify_csum(proto) &&
-+	    nf_reject_verify_csum(oldskb, ip_hdrlen(oldskb)) &&
++	    nf_reject_verify_csum(oldskb, ip_hdrlen(oldskb), proto) &&
  	    nf_ip_checksum(oldskb, hook, ip_hdrlen(oldskb), proto))
  		return;
  
@@ -14,7 +14,7 @@
  		return false;
  
 -	if (!nf_reject_verify_csum(proto))
-+	if (!nf_reject_verify_csum(skb, thoff))
++	if (!nf_reject_verify_csum(skb, thoff, proto))
  		return true;
  
  	return nf_ip6_checksum(skb, hook, thoff, proto) == 0;
