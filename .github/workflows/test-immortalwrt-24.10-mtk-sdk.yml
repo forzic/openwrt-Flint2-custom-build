@@ -1,4 +1,4 @@
-name: Build ImmortalWRT 24.10 Custom Firmware
+name: Build TEST ImmortalWRT 24.10 Custom Firmware
 
 on:
   workflow_dispatch:
@@ -72,6 +72,7 @@ jobs:
             llvm \
             libpcre3 \
             libpcre3-dev \
+            zstd \
             mold
 
       - name: Display contents of .config start
@@ -92,6 +93,7 @@ jobs:
           cat target/linux/mediatek/Makefile | grep KERNEL
           head -n 200 scripts/kconfig.pl
           make defconfig
+          cat immortalwrt-mt798x-24.10/.config
 
       - name: Extract Version Information
         run: |

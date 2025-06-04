@@ -8,7 +8,7 @@ on:
 
 env:
   REPO_URL: https://github.com/pesa1234/openwrt.git
-  REPO_BRANCH: next-r4.6.1.rss.mtk
+  REPO_BRANCH: next-r4.6.2.rss.mtk
   OpenWRTDevice: Flint2_GL-MT6000
   CONFIG_FILE: config.openwrt-custom-master
   TZ: Europe/Kyiv
@@ -75,6 +75,7 @@ jobs:
             llvm \
             libpcre3 \
             libpcre3-dev \
+            zstd \
             mold
 
       - name: Display contents of .config start
@@ -95,6 +96,7 @@ jobs:
           cat target/linux/mediatek/Makefile | grep KERNEL
           head -n 200 scripts/kconfig.pl
           make defconfig
+          cat openwrt/.config
 
       - name: Extract Version Information
         run: |
