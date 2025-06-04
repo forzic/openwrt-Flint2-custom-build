@@ -84,6 +84,40 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: Set build variables for feeds.mk
+        run: |
+          cd immortalwrt-mt798x-24.10
+            
+          # Set DATE variable for deployment path
+          echo "DATE=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_ENV
+            
+          # Set VERSION_CODE (extract from version info or default)
+          VERSION_CODE=$(grep -E "CONFIG_VERSION_CODE" .config | cut -d= -f2 | tr -d '"' || echo "24.10")
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+            
+          echo "Build variables set:"
+          echo "DATE: $(date +%Y%m%d_%H%M%S)"
+          echo "VERSION_CODE: $VERSION_CODE"
+
+      - name: Patch feeds.mk for custom package repository
+        run: |
+          cd immortalwrt-mt798x-24.10
+          # Add the new variables at the top after the -include line
+          sed -i '/^-include $(TMP_DIR)\/.packageauxvars$/a\\nIWRT_OPKG_LINK:=https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT\nOWRT_APK_LINK:=https://downloads.openwrt.org/snapshots/packages' include/feeds.mk
+          # Update OPKG core package path
+          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\$(DATE)_immortalwrt_\$(VERSION_CODE)_\$(IMMORTALWRT_VERSION)-kernel-\$(KERNEL_VERSION)/targets/%S/packages';|" include/feeds.mk
+          # Update OPKG base package path
+          sed -i "s|echo 'src/gz %d_base %U/packages/%A/base';|echo 'src/gz %d_base \$(IWRT_OPKG_LINK)/packages/%A/base';|" include/feeds.mk
+          # Update OPKG feed package paths
+          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) %U/packages/%A/\$(feed)';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) \$(IWRT_OPKG_LINK)/packages/%A/\$(feed)';|" include/feeds.mk
+          # Update APK core package path
+          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\$(DATE)_immortalwrt_\$(VERSION_CODE)_\$(IMMORTALWRT_VERSION)-kernel-\$(KERNEL_VERSION)/targets/%S/packages/packages.adb';|" include/feeds.mk
+          # Update APK base package path
+          sed -i "s|echo '%U/packages/%A/base/packages.adb';|echo '\$(OWRT_APK_LINK)/%A/base/packages.adb';|" include/feeds.mk
+          # Update APK feed package paths
+          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )%U/packages/%A/\$(feed)/packages.adb';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )\$(OWRT_APK_LINK)/%A/\$(feed)/packages.adb';|" include/feeds.mk
+          echo "feeds.mk patched successfully"
+
       - name: Configure Firmware
         run: |
           cp 903-fix-nft-reject-bridge.patch immortalwrt-mt798x-24.10/target/linux/generic/backport-5.4
@@ -160,11 +194,13 @@ jobs:
             cd $GITHUB_WORKSPACE
 
             # Create versioned directory name
-            PACKAGES_DIR_NAME="packages-output-${TIMESTAMP}-immortalwrt-${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
+            PACKAGES_DIR_NAME="${TIMESTAMP}_immortalwrt_$(echo $IMMORTALWRT_VERSION | tr '.' '_')_${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
+            TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')/packages"
+            PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/TARGET_PKG_DIR/packages"
+            mkdir -p "$PACKAGES_OUT"
+            cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages/* "$PACKAGES_OUT"
 
-            rm -rf packages-output*
-            cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages "$PACKAGES_DIR_NAME"
-            ln -sf "$PACKAGES_DIR_NAME" packages-output
+            ln -sf "$PACKAGES_OUT" packages-output
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
@@ -175,6 +211,17 @@ jobs:
           **ImmortalWRT Version:** ${{ env.IMMORTALWRT_VERSION }}
           **Kernel Version:** ${{ env.KERNEL_VERSION }}
           **Source Branch:** ${{ env.REPO_BRANCH }}
+          **Deploy Path:** $PACKAGES_DIR_NAME
+
+          ## Package Repository Configuration
+
+          Add this to your OpenWRT device's /etc/opkg/distfeeds.conf:
+
+          \`\`\`
+          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/$DEPLOY_DIR_NAME/targets/%S/packages
+          \`\`\`
+
+          Replace %S with your target (e.g., mediatek/filogic)
 
           ## Package List
           EOF
@@ -203,7 +250,7 @@ jobs:
             cd immortalwrt-mt798x-24.10/bin/targets/*/*
             TIMESTAMP=$(date +%Y%m%d_%H%M%S)
             PACKAGES_ARCHIVE="immortalwrt-packages-${TIMESTAMP}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
-            tar -czf "$PACKAGES_ARCHIVE" packages/
+            tar -czf "$PACKAGES_ARCHIVE" "$PACKAGES_OUT"
 
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
             echo "PACKAGES_CREATED=true" >> $GITHUB_ENV
