@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Get full history instead of single commit
           ref: ${{ github.ref }}
@@ -84,6 +84,40 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: Extract Version Information
+        run: |
+          cd immortalwrt-mt798x-24.10
+  
+          # Extract ImmortalWRT version from the source
+          IMMORTALWRT_VERSION="24_10-SNAPSHOT"
+  
+          # Extract kernel version from target configuration
+          KERNEL_VERSION=""
+          KERNEL_VERSION=$(grep -m1 'KERNEL' target/linux/mediatek/Makefile | cut -d= -f2 | tr -d ' ')
+  
+          if [ -z "$KERNEL_VERSION" ]; then
+            KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
+          fi
+  
+          if [ -z "$KERNEL_VERSION" ]; then
+            KERNEL_VERSION=$(find . -name "*.mk" -exec grep -h "LINUX_VERSION" {} \; | grep -E "^LINUX_VERSION" | head -1 | cut -d= -f2 | tr -d ' ')
+          fi
+  
+          # Set default values if extraction fails
+          IMMORTALWRT_VERSION=${IMMORTALWRT_VERSION:-"24.10-dev"}
+          KERNEL_VERSION=${KERNEL_VERSION:-"5"}
+  
+          # Clean up version strings
+          IMMORTALWRT_VERSION=$(echo "$IMMORTALWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
+          KERNEL_VERSION=$(echo "$KERNEL_VERSION" | sed 's/[^0-9.]//g')
+  
+          # Export to environment
+          echo "IMMORTALWRT_VERSION=$IMMORTALWRT_VERSION" >> $GITHUB_ENV
+          echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
+  
+          echo "Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
+          echo "Extracted Kernel Version: $KERNEL_VERSION"
+      
       - name: Set build variables for feeds.mk
         run: |
           cd immortalwrt-mt798x-24.10
@@ -92,7 +126,7 @@ jobs:
           echo "DATE=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_ENV
             
           # Set VERSION_CODE (extract from version info or default)
-          VERSION_CODE=$(grep -E "CONFIG_VERSION_CODE" .config | cut -d= -f2 | tr -d '"' || echo "24.10")
+          VERSION_CODE=$(git rev-parse --short HEAD)
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
             
           echo "Build variables set:"
@@ -127,54 +161,20 @@ jobs:
           cat target/linux/mediatek/Makefile | grep KERNEL
           head -n 200 scripts/kconfig.pl
           make defconfig
-          cat immortalwrt-mt798x-24.10/.config
-
-      - name: Extract Version Information
-        run: |
-          cd immortalwrt-mt798x-24.10
-
-          # Extract ImmortalWRT version from the source
-          IMMORTALWRT_VERSION="24.10-SNAPSHOT"
-
-          # Extract kernel version from target configuration
-          KERNEL_VERSION=""
-          KERNEL_VERSION=$(cat target/linux/mediatek/Makefile | grep KERNEL | head -1 | cut -d= -f2 | tr -d ' ')
-
-          if [ -z "$KERNEL_VERSION" ]; then
-            KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
-          fi
-
-          if [ -z "$KERNEL_VERSION" ]; then
-            KERNEL_VERSION=$(find . -name "*.mk" -exec grep -h "LINUX_VERSION" {} \; | grep -E "^LINUX_VERSION" | head -1 | cut -d= -f2 | tr -d ' ')
-          fi
-
-          # Set default values if extraction fails
-          IMMORTALWRT_VERSION=${IMMORTALWRT_VERSION:-"24.10-dev"}
-          KERNEL_VERSION=${KERNEL_VERSION:-"5"}
-
-          # Clean up version strings
-          IMMORTALWRT_VERSION=$(echo "$IMMORTALWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
-          KERNEL_VERSION=$(echo "$KERNEL_VERSION" | sed 's/[^0-9.]//g')
-
-          # Export to environment
-          echo "IMMORTALWRT_VERSION=$IMMORTALWRT_VERSION" >> $GITHUB_ENV
-          echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
-
-          echo "Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
-          echo "Extracted Kernel Version: $KERNEL_VERSION"
+          cat .config
 
       - name: Download Sources
         run: |
           cd immortalwrt-mt798x-24.10
-          make download -j$(nproc)
+          make download -j$(nproc --all) || { echo "Download failed"; exit 1; }
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
       - name: Build Firmware
         run: |
           cd immortalwrt-mt798x-24.10
-          echo -e "$(nproc) thread compile"
-          make -j$(nproc) || make -j1 V=s
+          echo -e "$(nproc --all) thread compile"
+          make -j$(nproc --all) || make -j1 V=s
 
       - name: Deploy and archive packages
         run: |
@@ -184,7 +184,6 @@ jobs:
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
 
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
             PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
             echo "Found $PACKAGE_COUNT .ipk packages"
 
@@ -194,7 +193,7 @@ jobs:
             cd $GITHUB_WORKSPACE
 
             # Create versioned directory name
-            PACKAGES_DIR_NAME="${TIMESTAMP}_immortalwrt_$(echo $IMMORTALWRT_VERSION | tr '.' '_')_${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
+            PACKAGES_DIR_NAME="${DATE}_immortalwrt_${VERSION_CODE}_${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
             TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')/packages"
             PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/TARGET_PKG_DIR/packages"
             mkdir -p "$PACKAGES_OUT"
@@ -248,8 +247,7 @@ jobs:
 
             # Create archive
             cd immortalwrt-mt798x-24.10/bin/targets/*/*
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-            PACKAGES_ARCHIVE="immortalwrt-packages-${TIMESTAMP}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
+            PACKAGES_ARCHIVE="immortalwrt-packages-${DATE}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
             tar -czf "$PACKAGES_ARCHIVE" "$PACKAGES_OUT"
 
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
@@ -283,14 +281,14 @@ jobs:
           echo "RelTag=${{ env.NOW }}_ImmortalWRT-${{ env.IMMORTALWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.ImmortalWRTDevice }}" >> $GITHUB_ENV
 
       - name: Upload firmware to github
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt_firmware-${{ env.ImmortalWRTDevice }}-${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}
 
       - name: Upload packages archive as artifact
         if: env.PACKAGES_CREATED == 'true'
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt_packages-${{ env.ImmortalWRTDevice }}-${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}/${{ env.PACKAGES_ARCHIVE }}
