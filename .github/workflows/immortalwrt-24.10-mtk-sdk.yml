@@ -23,6 +23,8 @@ jobs:
         uses: actions/checkout@main
 
       - name: Free up disk space
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo docker image prune --all --force
@@ -66,8 +68,12 @@ jobs:
             wget \
             llvm \
             libpcre3 \
-            libpcre3-dev
+            libpcre3-dev \
+            mold
 
+      - name: Display contents of .config start
+        run:  |
+          cat $GITHUB_WORKSPACE/$CONFIG_FILE
       - name: Update & Install Feeds
         run: |
           cd immortalwrt-mt798x-24.10
@@ -238,7 +244,7 @@ jobs:
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
+          prerelease: false
           title: "${{ env.RelTag }}"
           automatic_release_tag: "${{ env.BUILDINFO }}"
           files: |
