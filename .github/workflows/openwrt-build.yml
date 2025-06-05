@@ -163,7 +163,7 @@ jobs:
 
             # Create versioned directory name
             PACKAGES_DIR_NAME="${DATE}_openwrt_${VERSION_CODE}_${OpenWRT_VERSION}-kernel-${KERNEL_VERSION}"
-            TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' openwrt/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' openwrt/.config | cut -d= -f2 | tr -d '\"')/packages"
+            TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' openwrt/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' openwrt/.config | cut -d= -f2 | tr -d '\"')"
             PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/TARGET_PKG_DIR/packages"
             mkdir -p "$PACKAGES_OUT"
             cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* "$PACKAGES_OUT"
