@@ -87,48 +87,48 @@ jobs:
       - name: Extract Version Information
         run: |
           cd immortalwrt-mt798x-24.10
-  
+
           # Extract ImmortalWRT version from the source
           IMMORTALWRT_VERSION="24_10-SNAPSHOT"
-  
+
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
           KERNEL_VERSION=$(grep -m1 'KERNEL' target/linux/mediatek/Makefile | cut -d= -f2 | tr -d ' ')
-  
+
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
           fi
-  
+
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(find . -name "*.mk" -exec grep -h "LINUX_VERSION" {} \; | grep -E "^LINUX_VERSION" | head -1 | cut -d= -f2 | tr -d ' ')
           fi
-  
+
           # Set default values if extraction fails
           IMMORTALWRT_VERSION=${IMMORTALWRT_VERSION:-"24.10-dev"}
           KERNEL_VERSION=${KERNEL_VERSION:-"5"}
-  
+
           # Clean up version strings
           IMMORTALWRT_VERSION=$(echo "$IMMORTALWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
           KERNEL_VERSION=$(echo "$KERNEL_VERSION" | sed 's/[^0-9.]//g')
-  
+
           # Export to environment
           echo "IMMORTALWRT_VERSION=$IMMORTALWRT_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
-  
+
           echo "Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
           echo "Extracted Kernel Version: $KERNEL_VERSION"
-      
+
       - name: Set build variables for feeds.mk
         run: |
           cd immortalwrt-mt798x-24.10
-            
+
           # Set DATE variable for deployment path
           echo "DATE=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_ENV
-            
+
           # Set VERSION_CODE (extract from version info or default)
           VERSION_CODE=$(git rev-parse --short HEAD)
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
-            
+
           echo "Build variables set:"
           echo "DATE: $(date +%Y%m%d_%H%M%S)"
           echo "VERSION_CODE: $VERSION_CODE"
@@ -139,17 +139,17 @@ jobs:
           # Add the new variables at the top after the -include line
           sed -i '/^-include $(TMP_DIR)\/.packageauxvars$/a\\nIWRT_OPKG_LINK:=https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT\nOWRT_APK_LINK:=https://downloads.openwrt.org/snapshots/packages' include/feeds.mk
           # Update OPKG core package path
-          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\$(DATE)_immortalwrt_\$(VERSION_CODE)_\$(IMMORTALWRT_VERSION)-kernel-\$(KERNEL_VERSION)/targets/%S/packages';|" include/feeds.mk
+          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\${DATE}_immortalwrt_\$(VERSION_CODE)_\${IMMORTALWRT_VERSION}-kernel-\$(KERNEL_VERSION)/targets/%S/packages';|" include/feeds.mk
           # Update OPKG base package path
-          sed -i "s|echo 'src/gz %d_base %U/packages/%A/base';|echo 'src/gz %d_base \$(IWRT_OPKG_LINK)/packages/%A/base';|" include/feeds.mk
+          sed -i "s|echo 'src/gz %d_base %U/packages/%A/base';|echo 'src/gz %d_base \${IWRT_OPKG_LINK}/packages/%A/base';|" include/feeds.mk
           # Update OPKG feed package paths
-          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) %U/packages/%A/\$(feed)';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) \$(IWRT_OPKG_LINK)/packages/%A/\$(feed)';|" include/feeds.mk
+          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) %U/packages/%A/\$(feed)';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) \${IWRT_OPKG_LINK}/packages/%A/\$(feed)';|" include/feeds.mk
           # Update APK core package path
-          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\$(DATE)_immortalwrt_\$(VERSION_CODE)_\$(IMMORTALWRT_VERSION)-kernel-\$(KERNEL_VERSION)/targets/%S/packages/packages.adb';|" include/feeds.mk
+          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\${DATE}_immortalwrt_\$(VERSION_CODE)_\${IMMORTALWRT_VERSION}-kernel-\$(KERNEL_VERSION)/targets/%S/packages/packages.adb';|" include/feeds.mk
           # Update APK base package path
-          sed -i "s|echo '%U/packages/%A/base/packages.adb';|echo '\$(OWRT_APK_LINK)/%A/base/packages.adb';|" include/feeds.mk
+          sed -i "s|echo '%U/packages/%A/base/packages.adb';|echo '\${OWRT_APK_LINK}/%A/base/packages.adb';|" include/feeds.mk
           # Update APK feed package paths
-          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )%U/packages/%A/\$(feed)/packages.adb';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )\$(OWRT_APK_LINK)/%A/\$(feed)/packages.adb';|" include/feeds.mk
+          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )%U/packages/%A/\$(feed)/packages.adb';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )\${OWRT_APK_LINK}/%A/\$(feed)/packages.adb';|" include/feeds.mk
           echo "feeds.mk patched successfully"
 
       - name: Configure Firmware
@@ -301,7 +301,7 @@ jobs:
           title: "${{ env.RelTag }}"
           automatic_release_tag: "${{ env.BUILDINFO }}"
           files: |
-            ${{ env.FIRMWARE }}/*sysupgrade.bin
+            ${{ env.FIRMWARE }}/*.bin
             ${{ env.FIRMWARE }}/*.buildinfo
             ${{ env.FIRMWARE }}/*.manifest
             ${{ env.FIRMWARE }}/sha256sums
