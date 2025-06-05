@@ -206,7 +206,7 @@ jobs:
             # Create archive
             cd openwrt/bin/*_${REPO_BRANCH}/targets/mediatek/filogic
             PACKAGES_ARCHIVE="openwrt-packages-${DATE}-v${OpenWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
-            tar -czf "$PACKAGES_ARCHIVE" "$PACKAGES_OUT"
+            tar -czf "$PACKAGES_ARCHIVE" packages/
 
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
             echo "PACKAGES_CREATED=true" >> $GITHUB_ENV

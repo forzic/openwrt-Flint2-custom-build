@@ -248,7 +248,7 @@ jobs:
             # Create archive
             cd immortalwrt-mt798x-24.10/bin/targets/*/*
             PACKAGES_ARCHIVE="immortalwrt-packages-${DATE}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
-            tar -czf "$PACKAGES_ARCHIVE" "$PACKAGES_OUT"
+            tar -czf "$PACKAGES_ARCHIVE" packages/
 
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
             echo "PACKAGES_CREATED=true" >> $GITHUB_ENV
