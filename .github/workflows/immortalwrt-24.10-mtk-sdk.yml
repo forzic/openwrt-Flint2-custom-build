@@ -217,7 +217,7 @@ jobs:
           Add this to your OpenWRT device's /etc/opkg/distfeeds.conf:
 
           \`\`\`
-          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ PACKAGES_OUT }}
+          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ env.PACKAGES_OUT }}
           \`\`\`
 
           Replace %S with your target (e.g., mediatek/filogic)
