@@ -199,7 +199,7 @@ jobs:
             mkdir -p "$PACKAGES_OUT"
             cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages/* "$PACKAGES_OUT"
 
-            ln -sf "$PACKAGES_OUT" packages-output
+            ln -sf "$PACKAGES_OUT" packages-output-immortalwrt
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
@@ -235,7 +235,7 @@ jobs:
             git pull origin ${{ github.ref_name }} --rebase --autostash
 
             git add "$PACKAGES_DIR_NAME/"
-            git add packages-output
+            git add packages-output-immortalwrt
 
             if ! git diff --staged --quiet; then
               git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - ImmortalWRT ${IMMORTALWRT_VERSION} / Kernel ${KERNEL_VERSION}"

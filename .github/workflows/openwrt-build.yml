@@ -167,7 +167,7 @@ jobs:
             PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/TARGET_PKG_DIR/packages"
             mkdir -p "$PACKAGES_OUT"
             cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* "$PACKAGES_OUT"
-            ln -sf "$PACKAGES_OUT" packages-output
+            ln -sf "$PACKAGES_OUT" packages-output-openwrt
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
@@ -193,7 +193,7 @@ jobs:
             git pull origin ${{ github.ref_name }} --rebase --autostash
 
             git add "$PACKAGES_DIR_NAME/"
-            git add packages-output
+            git add packages-output-openwrt
 
             if ! git diff --staged --quiet; then
               git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - OpenWRT ${OpenWRT_VERSION} / Kernel ${KERNEL_VERSION}"
