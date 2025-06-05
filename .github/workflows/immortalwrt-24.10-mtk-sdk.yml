@@ -195,7 +195,7 @@ jobs:
             # Create versioned directory name
             PACKAGES_DIR_NAME="${DATE}_immortalwrt_${VERSION_CODE}_${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
             TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')/packages"
-            PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/TARGET_PKG_DIR/packages"
+            PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/$TARGET_PKG_DIR/packages"
             mkdir -p "$PACKAGES_OUT"
             cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages/* "$PACKAGES_OUT"
 
@@ -205,19 +205,19 @@ jobs:
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
           # ImmortalWRT Packages
 
-          **Generated on:** $(date -u)
+          **Generated on:** ${{ env.DATE }}
           **Device:** ${{ env.ImmortalWRTDevice }}
           **ImmortalWRT Version:** ${{ env.IMMORTALWRT_VERSION }}
           **Kernel Version:** ${{ env.KERNEL_VERSION }}
           **Source Branch:** ${{ env.REPO_BRANCH }}
-          **Deploy Path:** $PACKAGES_DIR_NAME
+          **Deploy Path:** ${{ env.PACKAGES_DIR_NAME }}
 
           ## Package Repository Configuration
 
           Add this to your OpenWRT device's /etc/opkg/distfeeds.conf:
 
           \`\`\`
-          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/$DEPLOY_DIR_NAME/targets/%S/packages
+          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ PACKAGES_OUT }}
           \`\`\`
 
           Replace %S with your target (e.g., mediatek/filogic)
