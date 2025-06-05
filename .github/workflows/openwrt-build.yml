@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Get full history instead of single commit
           ref: ${{ github.ref }}
@@ -96,7 +96,7 @@ jobs:
           cat target/linux/mediatek/Makefile | grep KERNEL
           head -n 200 scripts/kconfig.pl
           make defconfig
-          cat openwrt/.config
+          cat .config
 
       - name: Extract Version Information
         run: |
@@ -107,7 +107,7 @@ jobs:
 
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
-          KERNEL_VERSION=$(cat target/linux/mediatek/Makefile | grep KERNEL | head -1 | cut -d= -f2 | tr -d ' ')
+          KERNEL_VERSION=$(grep -m1 'KERNEL' target/linux/mediatek/Makefile | cut -d= -f2 | tr -d ' ')
 
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
@@ -135,15 +135,15 @@ jobs:
       - name: Download Sources
         run: |
           cd openwrt
-          make download -j$(nproc)
+          make download -j$(nproc --all) || { echo "Download failed"; exit 1; }
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
       - name: Build Firmware
         run: |
           cd openwrt
-          echo -e "$(nproc) thread compile"
-          make -j$(nproc) || make -j1 V=s
+          echo -e "$(nproc --all) thread compile"
+          make -j$(nproc --all) || make -j1 V=s
 
       - name: Deploy and archive packages
         run: |
@@ -153,7 +153,7 @@ jobs:
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
 
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            DATE=$(date +%Y%m%d_%H%M%S)
             PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
             echo "Found $PACKAGE_COUNT .ipk packages"
 
@@ -163,11 +163,12 @@ jobs:
             cd $GITHUB_WORKSPACE
 
             # Create versioned directory name
-            PACKAGES_DIR_NAME="packages-${TIMESTAMP}-output-openwrt-${OpenWRT_VERSION}-kernel-${KERNEL_VERSION}"
-
-            rm -rf packages-output*
-            cp -r openwrt/bin/targets/*/*/packages "$PACKAGES_DIR_NAME"
-            ln -sf "$PACKAGES_DIR_NAME" packages-output
+            PACKAGES_DIR_NAME="${DATE}_openwrt_${VERSION_CODE}_${OpenWRT_VERSION}-kernel-${KERNEL_VERSION}"
+            TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' openwrt/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' openwrt/.config | cut -d= -f2 | tr -d '\"')/packages"
+            PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/TARGET_PKG_DIR/packages"
+            mkdir -p "$PACKAGES_OUT"
+            cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* "$PACKAGES_OUT"
+            ln -sf "$PACKAGES_OUT" packages-output
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
@@ -178,6 +179,7 @@ jobs:
           **OpenWRT Version:** ${{ env.OpenWRT_VERSION }}
           **Kernel Version:** ${{ env.KERNEL_VERSION }}
           **Source Branch:** ${{ env.REPO_BRANCH }}
+          **Deploy Path:** $PACKAGES_DIR_NAME
 
           ## Package List
           EOF
@@ -204,9 +206,8 @@ jobs:
 
             # Create archive
             cd openwrt/bin/*_${REPO_BRANCH}/targets/mediatek/filogic
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-            PACKAGES_ARCHIVE="openwrt-packages-${TIMESTAMP}-v${OpenWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
-            tar -czf "$PACKAGES_ARCHIVE" packages/
+            PACKAGES_ARCHIVE="openwrt-packages-${DATE}-v${OpenWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
+            tar -czf "$PACKAGES_ARCHIVE" "$PACKAGES_OUT"
 
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
             echo "PACKAGES_CREATED=true" >> $GITHUB_ENV
@@ -239,14 +240,14 @@ jobs:
           echo "RelTag=${{ env.NOW }}_OpenWRT-${{ env.OpenWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.OpenWRTDevice }}" >> $GITHUB_ENV
 
       - name: Upload firmware to github
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: OpenWrt_firmware-${{ env.OpenWRTDevice }}-${{ env.OpenWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}
 
       - name: Upload packages archive as artifact
         if: env.PACKAGES_CREATED == 'true'
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: OpenWRT_packages-${{ env.OpenWRTDevice }}-${{ env.OpenWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}/${{ env.PACKAGES_ARCHIVE }}
