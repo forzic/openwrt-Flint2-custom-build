@@ -139,13 +139,13 @@ jobs:
           # Add the new variables at the top after the -include line
           sed -i '/^-include $(TMP_DIR)\/.packageauxvars$/a\\nIWRT_OPKG_LINK:=https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT\nOWRT_APK_LINK:=https://downloads.openwrt.org/snapshots/packages' include/feeds.mk
           # Update OPKG core package path
-          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\${DATE}_immortalwrt_\$(VERSION_CODE)_\${IMMORTALWRT_VERSION}-kernel-\$(KERNEL_VERSION)/targets/%S/packages';|" include/feeds.mk
+          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\${DATE}_immortalwrt_\${VERSION_CODE}_\${IMMORTALWRT_VERSION}-kernel-\$(KERNEL_VERSION)/targets/%S/packages';|" include/feeds.mk
           # Update OPKG base package path
           sed -i "s|echo 'src/gz %d_base %U/packages/%A/base';|echo 'src/gz %d_base \${IWRT_OPKG_LINK}/packages/%A/base';|" include/feeds.mk
           # Update OPKG feed package paths
           sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) %U/packages/%A/\$(feed)';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) \${IWRT_OPKG_LINK}/packages/%A/\$(feed)';|" include/feeds.mk
           # Update APK core package path
-          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\${DATE}_immortalwrt_\$(VERSION_CODE)_\${IMMORTALWRT_VERSION}-kernel-\$(KERNEL_VERSION)/targets/%S/packages/packages.adb';|" include/feeds.mk
+          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\${DATE}_immortalwrt_\${VERSION_CODE}_\${IMMORTALWRT_VERSION}-kernel-\$(KERNEL_VERSION)/targets/%S/packages/packages.adb';|" include/feeds.mk
           # Update APK base package path
           sed -i "s|echo '%U/packages/%A/base/packages.adb';|echo '\${OWRT_APK_LINK}/%A/base/packages.adb';|" include/feeds.mk
           # Update APK feed package paths
