@@ -154,7 +154,8 @@ jobs:
 
       - name: Try to fix WAN
         run:
-          cd immortalwrt-mt798x-24.10
+          cd immortalwrt-mt798x-24.10;
+
           sed -i '/label = "wan";/d' target/linux/mediatek/files-5.4/arch/arm64/boot/dts/mediatek/mt7986a-glinet-gl-mt6000.dts
 
       - name: Configure Firmware
