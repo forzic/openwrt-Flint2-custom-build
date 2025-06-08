@@ -162,9 +162,9 @@ jobs:
             # Create versioned directory name
             PACKAGES_DIR_NAME="packages-output-${TIMESTAMP}-immortalwrt-${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
 
-            rm -rf packages-output-immortalwrt-test
+            rm -rf packages-output-immortalwrt-2410-test
             cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages "$PACKAGES_DIR_NAME"
-            ln -sf "$PACKAGES_DIR_NAME" packages-output-immortalwrt-test
+            ln -sf "$PACKAGES_DIR_NAME" packages-output-immortalwrt-2410-test
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
@@ -189,7 +189,7 @@ jobs:
             git pull origin ${{ github.ref_name }} --rebase --autostash
 
             git add "$PACKAGES_DIR_NAME/"
-            git add packages-output-immortalwrt-test
+            git add packages-output-immortalwrt-2410-test
 
             if ! git diff --staged --quiet; then
               git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - ImmortalWRT ${IMMORTALWRT_VERSION} / Kernel ${KERNEL_VERSION}"
