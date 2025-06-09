@@ -78,18 +78,29 @@ jobs:
       - name: Display contents of .config start
         run:  |
           cat $GITHUB_WORKSPACE/$CONFIG_FILE
+
       - name: Update & Install Feeds
         run: |
           cd immortalwrt-mt798x
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: Configure Firmware
+        run: |
+          cp $CONFIG_FILE immortalwrt-mt798x/.config
+          cd immortalwrt-mt798x
+          perl --version
+          cat target/linux/mediatek/Makefile | grep KERNEL
+          head -n 200 scripts/kconfig.pl
+          make defconfig
+          cat .config
+
       - name: Extract Version Information
         run: |
           cd immortalwrt-mt798x
 
           # Extract ImmortalWRT version from the source
-          IMMORTALWRT_VERSION="21_02-SNAPSHOT"
+          IMMORTALWRT_VERSION="21.02-SNAPSHOT"
 
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
@@ -105,7 +116,7 @@ jobs:
 
           # Set default values if extraction fails
           IMMORTALWRT_VERSION=${IMMORTALWRT_VERSION:-"21.02-dev"}
-          KERNEL_VERSION=${KERNEL_VERSION:-"5"}
+          KERNEL_VERSION=${KERNEL_VERSION:-"5.4"}
 
           # Clean up version strings
           IMMORTALWRT_VERSION=$(echo "$IMMORTALWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
@@ -118,7 +129,7 @@ jobs:
           echo "Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
           echo "Extracted Kernel Version: $KERNEL_VERSION"
 
-      - name: Set build variables for feeds.mk
+      - name: Set target directory variables
         run: |
           cd immortalwrt-mt798x
 
@@ -133,48 +144,45 @@ jobs:
           echo "DATE: $(date +%Y%m%d_%H%M%S)"
           echo "VERSION_CODE: $VERSION_CODE"
 
+      - name: Create target deploy dirs
+        run: |
+          # Create versioned directory name
+          PACKAGES_DIR_NAME="${DATE}_immortalwrt_${VERSION_CODE}_${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}" >> $GITHUB_ENV
+          TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' immortalwrt-mt798x/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' immortalwrt-mt798x/.config | cut -d= -f2 | tr -d '\"')" >> $GITHUB_ENV
+          PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/$TARGET_PKG_DIR/packages" >> $GITHUB_ENV
+          mkdir -p "$PACKAGES_OUT"
+
       - name: Patch feeds.mk for custom package repository
         run: |
           cd immortalwrt-mt798x
           # Add the new variables at the top after the -include line
           sed -i '/^-include $(TMP_DIR)\/.packageauxvars$/a\\nIWRT_OPKG_LINK:=https://downloads.immortalwrt.org/releases/21.02-SNAPSHOT\nOWRT_APK_LINK:=https://downloads.openwrt.org/snapshots/packages' include/feeds.mk
           # Update OPKG core package path
-          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\${DATE}_immortalwrt_\${VERSION_CODE}_\${IMMORTALWRT_VERSION}-kernel-\$(KERNEL_VERSION)/targets/%S/packages';|" include/feeds.mk
+          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\${PACKAGES_OUT}';|" include/feeds.mk
           # Update OPKG base package path
           sed -i "s|echo 'src/gz %d_base %U/packages/%A/base';|echo 'src/gz %d_base \${IWRT_OPKG_LINK}/packages/%A/base';|" include/feeds.mk
           # Update OPKG feed package paths
           sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) %U/packages/%A/\$(feed)';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) \${IWRT_OPKG_LINK}/packages/%A/\$(feed)';|" include/feeds.mk
           # Update APK core package path
-          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\${DATE}_immortalwrt_\${VERSION_CODE}_\${IMMORTALWRT_VERSION}-kernel-\$(KERNEL_VERSION)/targets/%S/packages/packages.adb';|" include/feeds.mk
+          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\${PACKAGES_OUT}/packages.adb';|" include/feeds.mk
           # Update APK base package path
           sed -i "s|echo '%U/packages/%A/base/packages.adb';|echo '\${OWRT_APK_LINK}/%A/base/packages.adb';|" include/feeds.mk
           # Update APK feed package paths
           sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )%U/packages/%A/\$(feed)/packages.adb';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )\${OWRT_APK_LINK}/%A/\$(feed)/packages.adb';|" include/feeds.mk
           echo "feeds.mk patched successfully"
 
-      - name: Configure Firmware
-        run: |
-          #cp 903-fix-nft-reject-bridge.patch immortalwrt-mt798x/target/linux/generic/backport-5.4
-          cp $CONFIG_FILE immortalwrt-mt798x/.config
-          cd immortalwrt-mt798x
-          perl --version
-          cat target/linux/mediatek/Makefile | grep KERNEL
-          head -n 200 scripts/kconfig.pl
-          make defconfig
-          cat .config
-
       - name: Download Sources
         run: |
           cd immortalwrt-mt798x
-          make download -j$(nproc --all) || { echo "Download failed"; exit 1; }
+          make download -j$(nproc) || { echo "Download failed"; exit 1; }
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
       - name: Build Firmware
         run: |
           cd immortalwrt-mt798x
-          echo -e "$(nproc --all) thread compile"
-          make -j$(nproc --all) || make -j1 V=s
+          echo -e "$(nproc) thread compile"
+          make -j$(nproc) || make -j1 V=s
 
       - name: Deploy and archive packages
         run: |
@@ -192,13 +200,7 @@ jobs:
 
             cd $GITHUB_WORKSPACE
 
-            # Create versioned directory name
-            PACKAGES_DIR_NAME="${DATE}_immortalwrt_${VERSION_CODE}_${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}" >> $GITHUB_ENV
-            TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' immortalwrt-mt798x/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' immortalwrt-mt798x/.config | cut -d= -f2 | tr -d '\"')" >> $GITHUB_ENV
-            PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/$TARGET_PKG_DIR/packages" >> $GITHUB_ENV
-            mkdir -p "$PACKAGES_OUT"
             cp -r immortalwrt-mt798x/bin/targets/*/*/packages/* "$PACKAGES_OUT"
-
             ln -sf "$PACKAGES_OUT" packages-output-immortalwrt-2102-hanwckf
 
             # Create README with version info

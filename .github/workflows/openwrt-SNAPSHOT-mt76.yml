@@ -81,6 +81,7 @@ jobs:
       - name: Display contents of .config start
         run:  |
           cat $GITHUB_WORKSPACE/$CONFIG_FILE
+
       - name: Update & Install Feeds
         run: |
           cd openwrt
@@ -131,18 +132,48 @@ jobs:
           echo "Extracted OpenWRT Version: $OpenWRT_VERSION"
           echo "Extracted Kernel Version: $KERNEL_VERSION"
 
+      - name: Set target directory variables
+        run: |
+          cd openwrt
+
+          # Set DATE variable for deployment path
+          echo "DATE=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_ENV
+
+          # Set VERSION_CODE (extract from version info or default)
+          VERSION_CODE=$(git rev-parse --short HEAD)
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+
+          echo "Build variables set:"
+          echo "DATE: $(date +%Y%m%d_%H%M%S)"
+          echo "VERSION_CODE: $VERSION_CODE"
+
+      - name: Create target deploy dirs
+        run: |
+          # Create versioned directory name
+          PACKAGES_DIR_NAME="${DATE}_openwrt_${VERSION_CODE}_${OPENWRT_VERSION}-kernel-${KERNEL_VERSION}" >> $GITHUB_ENV
+          TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' openwrt/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' openwrt/.config | cut -d= -f2 | tr -d '\"')" >> $GITHUB_ENV
+          PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/$TARGET_PKG_DIR/packages" >> $GITHUB_ENV
+          mkdir -p "$PACKAGES_OUT"
+
+      - name: Patch feeds.mk for custom package repository
+        run: |
+          cd openwrt
+          # Update APK core package path
+          sed -i "s|echo '%U/$(DATE)_$(VERSION_CODE)_$(BRANCH)/targets/%S/packages/packages.adb';|echo '%U/\${PACKAGES_OUT}/packages.adb';|" include/feeds.mk
+          echo "feeds.mk patched successfully"
+
       - name: Download Sources
         run: |
           cd openwrt
-          make download -j$(nproc --all) || { echo "Download failed"; exit 1; }
+          make download -j$(nproc) || { echo "Download failed"; exit 1; }
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
       - name: Build Firmware
         run: |
           cd openwrt
-          echo -e "$(nproc --all) thread compile"
-          make -j$(nproc --all) || make -j1 V=s
+          echo -e "$(nproc) thread compile"
+          make -j$(nproc) || make -j1 V=s
 
       - name: Deploy and archive packages
         run: |
@@ -152,7 +183,6 @@ jobs:
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
 
-            DATE=$(date +%Y%m%d_%H%M%S)
             PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
             echo "Found $PACKAGE_COUNT .ipk packages"
 
@@ -161,11 +191,6 @@ jobs:
 
             cd $GITHUB_WORKSPACE;
 
-            # Create versioned directory name
-            PACKAGES_DIR_NAME="${DATE}_openwrt_${VERSION_CODE}_${OpenWRT_VERSION}-kernel-${KERNEL_VERSION}"
-            TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' openwrt/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' openwrt/.config | cut -d= -f2 | tr -d '\"')"
-            PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/$TARGET_PKG_DIR/packages"
-            mkdir -p "$PACKAGES_OUT"
             cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* "$PACKAGES_OUT"
             ln -sf "$PACKAGES_OUT" packages-output-openwrt-snapshot-pesa1234
 
@@ -173,12 +198,22 @@ jobs:
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
           # OpenWRT Packages
 
-          **Generated on:** $(date -u)
+          **Generated on:** ${{ env.DATE }}
           **Device:** ${{ env.OpenWRTDevice }}
           **OpenWRT Version:** ${{ env.OpenWRT_VERSION }}
           **Kernel Version:** ${{ env.KERNEL_VERSION }}
           **Source Branch:** ${{ env.REPO_BRANCH }}
-          **Deploy Path:** $PACKAGES_DIR_NAME
+          **Deploy Path:** ${{ env.PACKAGES_DIR_NAME }}
+
+          ## Package Repository Configuration
+
+          Add this to your OpenWRT device's /etc/opkg/distfeeds.conf:
+
+          \`\`\`
+          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ env.PACKAGES_OUT }}
+          \`\`\`
+
+          Replace %S with your target (e.g., mediatek/filogic)
 
           ## Package List
           EOF
@@ -259,7 +294,7 @@ jobs:
           title: "${{ env.RelTag }}"
           automatic_release_tag: "${{ env.BUILDINFO }}"
           files: |
-            ${{ env.FIRMWARE }}/*sysupgrade.bin
+            ${{ env.FIRMWARE }}/*.bin
             ${{ env.FIRMWARE }}/*.buildinfo
             ${{ env.FIRMWARE }}/*.manifest
             ${{ env.FIRMWARE }}/sha256sums

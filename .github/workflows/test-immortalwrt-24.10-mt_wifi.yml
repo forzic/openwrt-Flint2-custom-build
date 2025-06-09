@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Get full history instead of single commit
           ref: ${{ github.ref }}
@@ -78,6 +78,7 @@ jobs:
       - name: Display contents of .config start
         run:  |
           cat $GITHUB_WORKSPACE/$CONFIG_FILE
+
       - name: Update & Install Feeds
         run: |
           cd immortalwrt-mt798x-24.10
@@ -104,7 +105,7 @@ jobs:
 
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
-          KERNEL_VERSION=$(cat target/linux/mediatek/Makefile | grep KERNEL | head -1 | cut -d= -f2 | tr -d ' ')
+          KERNEL_VERSION=$(grep -m1 'KERNEL' target/linux/mediatek/Makefile | cut -d= -f2 | tr -d ' ')
 
           if [ -z "$KERNEL_VERSION" ]; then
             KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
@@ -116,7 +117,7 @@ jobs:
 
           # Set default values if extraction fails
           IMMORTALWRT_VERSION=${IMMORTALWRT_VERSION:-"24.10-dev"}
-          KERNEL_VERSION=${KERNEL_VERSION:-"5"}
+          KERNEL_VERSION=${KERNEL_VERSION:-"5.4"}
 
           # Clean up version strings
           IMMORTALWRT_VERSION=$(echo "$IMMORTALWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
@@ -129,10 +130,52 @@ jobs:
           echo "Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
           echo "Extracted Kernel Version: $KERNEL_VERSION"
 
+      - name: Set target directory variables
+        run: |
+          cd immortalwrt-mt798x-24.10
+
+          # Set DATE variable for deployment path
+          echo "DATE=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_ENV
+
+          # Set VERSION_CODE (extract from version info or default)
+          VERSION_CODE=$(git rev-parse --short HEAD)
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+
+          echo "Build variables set:"
+          echo "DATE: $(date +%Y%m%d_%H%M%S)"
+          echo "VERSION_CODE: $VERSION_CODE"
+
+      - name: Create target deploy dirs
+        run: |
+          # Create versioned directory name
+          PACKAGES_DIR_NAME="${DATE}_immortalwrt_${VERSION_CODE}_${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}" >> $GITHUB_ENV
+          TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')" >> $GITHUB_ENV
+          PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/$TARGET_PKG_DIR/packages" >> $GITHUB_ENV
+          mkdir -p "$PACKAGES_OUT"
+
+      - name: Patch feeds.mk for custom package repository
+        run: |
+          cd immortalwrt-mt798x-24.10
+          # Add the new variables at the top after the -include line
+          sed -i '/^-include $(TMP_DIR)\/.packageauxvars$/a\\nIWRT_OPKG_LINK:=https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT\nOWRT_APK_LINK:=https://downloads.openwrt.org/snapshots/packages' include/feeds.mk
+          # Update OPKG core package path
+          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\${PACKAGES_OUT}';|" include/feeds.mk
+          # Update OPKG base package path
+          sed -i "s|echo 'src/gz %d_base %U/packages/%A/base';|echo 'src/gz %d_base \${IWRT_OPKG_LINK}/packages/%A/base';|" include/feeds.mk
+          # Update OPKG feed package paths
+          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) %U/packages/%A/\$(feed)';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) \${IWRT_OPKG_LINK}/packages/%A/\$(feed)';|" include/feeds.mk
+          # Update APK core package path
+          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\${PACKAGES_OUT}/packages.adb';|" include/feeds.mk
+          # Update APK base package path
+          sed -i "s|echo '%U/packages/%A/base/packages.adb';|echo '\${OWRT_APK_LINK}/%A/base/packages.adb';|" include/feeds.mk
+          # Update APK feed package paths
+          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )%U/packages/%A/\$(feed)/packages.adb';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )\${OWRT_APK_LINK}/%A/\$(feed)/packages.adb';|" include/feeds.mk
+          echo "feeds.mk patched successfully"
+
       - name: Download Sources
         run: |
           cd immortalwrt-mt798x-24.10
-          make download -j$(nproc)
+          make download -j$(nproc) || { echo "Download failed"; exit 1; }
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
@@ -150,7 +193,6 @@ jobs:
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
 
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
             PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
             echo "Found $PACKAGE_COUNT .ipk packages"
 
@@ -159,22 +201,29 @@ jobs:
 
             cd $GITHUB_WORKSPACE
 
-            # Create versioned directory name
-            PACKAGES_DIR_NAME="packages-output-${TIMESTAMP}-immortalwrt-${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}"
-
-            rm -rf packages-output-immortalwrt-2410-test
-            cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages "$PACKAGES_DIR_NAME"
-            ln -sf "$PACKAGES_DIR_NAME" packages-output-immortalwrt-2410-test
+            cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages/* "$PACKAGES_OUT"
+            ln -sf "$PACKAGES_OUT" packages-output-immortalwrt-2410-test-padavanonly
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
           # ImmortalWRT Packages
 
-          **Generated on:** $(date -u)
+          **Generated on:** ${{ env.DATE }}
           **Device:** ${{ env.ImmortalWRTDevice }}
           **ImmortalWRT Version:** ${{ env.IMMORTALWRT_VERSION }}
           **Kernel Version:** ${{ env.KERNEL_VERSION }}
           **Source Branch:** ${{ env.REPO_BRANCH }}
+          **Deploy Path:** ${{ env.PACKAGES_DIR_NAME }}
+
+          ## Package Repository Configuration
+
+          Add this to your OpenWRT device's /etc/opkg/distfeeds.conf:
+
+          \`\`\`
+          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ env.PACKAGES_OUT }}
+          \`\`\`
+
+          Replace %S with your target (e.g., mediatek/filogic)
 
           ## Package List
           EOF
@@ -201,8 +250,7 @@ jobs:
 
             # Create archive
             cd immortalwrt-mt798x-24.10/bin/targets/*/*
-            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-            PACKAGES_ARCHIVE="immortalwrt-packages-${TIMESTAMP}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
+            PACKAGES_ARCHIVE="immortalwrt-packages-${DATE}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
             tar -czf "$PACKAGES_ARCHIVE" packages/
 
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
@@ -236,14 +284,14 @@ jobs:
           echo "RelTag=${{ env.NOW }}_ImmortalWRT-${{ env.IMMORTALWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.ImmortalWRTDevice }}" >> $GITHUB_ENV
 
       - name: Upload firmware to github
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt_firmware-${{ env.ImmortalWRTDevice }}-${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}
 
       - name: Upload packages archive as artifact
         if: env.PACKAGES_CREATED == 'true'
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: ImmortalWrt_packages-${{ env.ImmortalWRTDevice }}-${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}/${{ env.PACKAGES_ARCHIVE }}
@@ -256,7 +304,7 @@ jobs:
           title: "${{ env.RelTag }}"
           automatic_release_tag: "${{ env.BUILDINFO }}"
           files: |
-            ${{ env.FIRMWARE }}/*sysupgrade.bin
+            ${{ env.FIRMWARE }}/*.bin
             ${{ env.FIRMWARE }}/*.buildinfo
             ${{ env.FIRMWARE }}/*.manifest
             ${{ env.FIRMWARE }}/sha256sums
