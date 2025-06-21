@@ -87,7 +87,7 @@ jobs:
 
       - name: Configure Firmware
         run: |
-          #cp 903-fix-nft-reject-bridge.patch immortalwrt-mt798x-24.10/target/linux/generic/backport-5.4
+          cp 903-fix-nft-reject-bridge.patch immortalwrt-mt798x-24.10/target/linux/generic/backport-5.4
           cp $CONFIG_FILE immortalwrt-mt798x-24.10/.config
           cd immortalwrt-mt798x-24.10
           perl --version
@@ -108,11 +108,7 @@ jobs:
           KERNEL_VERSION=$(grep -m1 'KERNEL' target/linux/mediatek/Makefile | cut -d= -f2 | tr -d ' ')
 
           if [ -z "$KERNEL_VERSION" ]; then
-            KERNEL_VERSION=$(grep "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | head -1 | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
-          fi
-
-          if [ -z "$KERNEL_VERSION" ]; then
-            KERNEL_VERSION=$(find . -name "*.mk" -exec grep -h "LINUX_VERSION" {} \; | grep -E "^LINUX_VERSION" | head -1 | cut -d= -f2 | tr -d ' ')
+            KERNEL_VERSION=$(grep -m1 "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
           fi
 
           # Set default values if extraction fails
