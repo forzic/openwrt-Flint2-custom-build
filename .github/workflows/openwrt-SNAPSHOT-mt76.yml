@@ -110,7 +110,7 @@ jobs:
           KERNEL_VERSION=$(grep -m1 'KERNEL' target/linux/mediatek/Makefile | cut -d= -f2 | tr -d ' ')
 
           if [ -z "$KERNEL_VERSION" ]; then
-            if grep 'HAS_TESTING_KERNEL=y' .config then
+            if grep 'HAS_TESTING_KERNEL=y' .config; then
               KERNEL_VERSION=$(grep -m1 "KERNEL_TESTING_PATCHVER:" include/kernel-version.mk 2>/dev/null | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
             else
               KERNEL_VERSION=$(grep -m1 "KERNEL_PATCHVER:" include/kernel-version.mk 2>/dev/null | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
