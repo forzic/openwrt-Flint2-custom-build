@@ -107,7 +107,6 @@ jobs:
 
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
-          KERNEL_VERSION=$(grep -m1 'KERNEL' target/linux/mediatek/Makefile | cut -d= -f2 | tr -d ' ')
 
           if [ -z "$KERNEL_VERSION" ]; then
             if grep 'HAS_TESTING_KERNEL=y' .config; then
@@ -191,8 +190,8 @@ jobs:
 
             cd $GITHUB_WORKSPACE;
 
-            cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* "$PACKAGES_OUT"
-            ln -sf "$PACKAGES_OUT" packages-output-openwrt-snapshot-pesa1234
+            cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* {{ env.PACKAGES_OUT }}
+            ln -sf {{ env.PACKAGES_OUT }} packages-output-openwrt-snapshot-pesa1234
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
