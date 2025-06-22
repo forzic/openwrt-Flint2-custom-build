@@ -151,8 +151,8 @@ jobs:
           # Create versioned directory name
           PACKAGES_DIR_NAME="${DATE}_openwrt_${VERSION_CODE}_${OPENWRT_VERSION}-kernel-${KERNEL_VERSION}"
           TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' openwrt/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' openwrt/.config | cut -d= -f2 | tr -d '\"')"
-          PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/$TARGET_PKG_DIR/packages"
-          mkdir -p "$PACKAGES_OUT"
+          PACKAGES_OUT="${PACKAGES_DIR_NAME}/targets/${TARGET_PKG_DIR}/packages"
+          mkdir -p "${PACKAGES_OUT}"
 
       - name: Patch feeds.mk for custom package repository
         run: |
@@ -190,7 +190,7 @@ jobs:
 
             cd $GITHUB_WORKSPACE;
 
-            cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* ${PACKAGES_OUT}
+            cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/ ${PACKAGES_OUT}
             ln -sf ${PACKAGES_OUT} packages-output-openwrt-snapshot-pesa1234
 
             # Create README with version info
@@ -209,7 +209,7 @@ jobs:
           Add this to your OpenWRT device's /etc/opkg/distfeeds.conf:
 
           \`\`\`
-          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ env.PACKAGES_OUT }}
+          src/gz openwrt_core https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ env. }}
           \`\`\`
 
           Replace %S with your target (e.g., mediatek/filogic)
