@@ -177,7 +177,7 @@ jobs:
       - name: Deploy and archive packages
         run: |
           ls openwrt/bin/*/targets/*/*
-          cd openwrt/bin/*_${REPO_BRANCH}/targets/mediatek/filogic;
+          cd openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/mediatek/filogic;
 
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
