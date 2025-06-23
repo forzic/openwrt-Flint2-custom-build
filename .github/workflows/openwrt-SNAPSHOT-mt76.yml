@@ -190,7 +190,7 @@ jobs:
 
             cd $GITHUB_WORKSPACE;
 
-            cp openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* ${PACKAGES_OUT}
+            cp openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/*/*/packages/* ${PACKAGES_OUT}
             ln -sf ${PACKAGES_OUT} packages-output-openwrt-snapshot-pesa1234
 
             # Create README with version info
@@ -238,7 +238,7 @@ jobs:
             fi
 
             # Create archive
-            cd openwrt/bin/*_${REPO_BRANCH}/targets/mediatek/filogic;
+            cd openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/mediatek/filogic;
             PACKAGES_ARCHIVE="openwrt-packages-${DATE}-v${OpenWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
             tar -czf "$PACKAGES_ARCHIVE" packages/
 
@@ -257,7 +257,7 @@ jobs:
       - name: Organize files
         id: organize
         run: |
-          cd openwrt/bin/*_${REPO_BRANCH}/targets/mediatek/filogic;
+          cd openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/mediatek/filogic;
           rm -rf packages
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "NOW=$(date +%F-%H%M)" >> $GITHUB_ENV
