@@ -154,6 +154,10 @@ jobs:
           PACKAGES_OUT="${PACKAGES_DIR_NAME}/targets/${TARGET_PKG_DIR}/packages"
           mkdir -p "${PACKAGES_OUT}"
 
+          echo "PACKAGES_DIR_NAME=$PACKAGES_DIR_NAME" >> $GITHUB_ENV
+          echo "TARGET_PKG_DIR=$TARGET_PKG_DIR" >> $GITHUB_ENV
+          echo "PACKAGES_OUT=$PACKAGES_OUT" >> $GITHUB_ENV
+
       - name: Patch feeds.mk for custom package repository
         run: |
           cd openwrt
@@ -182,15 +186,15 @@ jobs:
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
 
-            PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
-            echo "Found $PACKAGE_COUNT .ipk packages"
+            PACKAGE_COUNT=$(find packages -name "*.apk" | wc -l)
+            echo "Found $PACKAGE_COUNT .apk packages"
 
             git config --global user.name 'OpenWRT Build Bot'
             git config --global user.email 'actions@github.com'
 
             cd $GITHUB_WORKSPACE;
 
-            cp openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/*/*/packages/* ${PACKAGES_OUT}
+            cp -v openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/*/*/packages/* ${PACKAGES_OUT}
             ln -sf ${PACKAGES_OUT} packages-output-openwrt-snapshot-pesa1234
 
             # Create README with version info
@@ -218,7 +222,7 @@ jobs:
           EOF
 
             # Add package list to README
-            find "$PACKAGES_DIR_NAME" -name "*.ipk" -type f | sort | while read -r pkg; do
+            find "$PACKAGES_DIR_NAME" -name "*.apk" -type f | sort | while read -r pkg; do
               PKG_NAME=$(basename "$pkg")
               PKG_SIZE=$(du -h "$pkg" | cut -f1)
               echo "- $PKG_NAME ($PKG_SIZE)" >> "$PACKAGES_DIR_NAME/README.md"
@@ -230,7 +234,7 @@ jobs:
             git add packages-output-openwrt-snapshot-pesa1234
 
             if ! git diff --staged --quiet; then
-              git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - OpenWRT ${OpenWRT_VERSION} / Kernel ${KERNEL_VERSION}"
+              git commit -m "Update packages ($PACKAGE_COUNT .apk files) - OpenWRT ${OpenWRT_VERSION} / Kernel ${KERNEL_VERSION}"
               git push origin ${{ github.ref_name }}
               echo "Successfully deployed $PACKAGE_COUNT packages"
             else
