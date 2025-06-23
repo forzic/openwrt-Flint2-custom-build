@@ -190,7 +190,7 @@ jobs:
 
             cd $GITHUB_WORKSPACE;
 
-            cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/ ${PACKAGES_OUT}
+            cp -r openwrt/bin/*_${REPO_BRANCH}/targets/*/*/packages/* ${PACKAGES_OUT}
             ln -sf ${PACKAGES_OUT} packages-output-openwrt-snapshot-pesa1234
 
             # Create README with version info
