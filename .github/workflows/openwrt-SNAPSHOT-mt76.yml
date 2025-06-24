@@ -180,8 +180,12 @@ jobs:
 
       - name: Deploy and archive packages
         run: |
-          ls openwrt/bin/*/targets/*/*
-          cd openwrt/bin/*_${REPO_BRANCH}/targets/mediatek/filogic;
+          BUILD_DIR=$(ls -d openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH})
+          echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
+          echo "Actual build path: $BUILD_DIR"
+
+          ls ${BUILD_DIR}/targets/*/*
+          cd ${BUILD_DIR}/targets/mediatek/filogic;
 
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
@@ -194,7 +198,7 @@ jobs:
 
             cd $GITHUB_WORKSPACE;
 
-            cp -v openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/*/*/packages/* ${PACKAGES_OUT}
+            cp -v ${BUILD_DIR}/targets/*/*/packages/* ${PACKAGES_OUT}
             ln -sf ${PACKAGES_OUT} packages-output-openwrt-snapshot-pesa1234
 
             # Create README with version info
@@ -242,7 +246,7 @@ jobs:
             fi
 
             # Create archive
-            cd openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/mediatek/filogic;
+            cd ${BUILD_DIR}/targets/mediatek/filogic;
             PACKAGES_ARCHIVE="openwrt-packages-${DATE}-v${OpenWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
             tar -czf "$PACKAGES_ARCHIVE" packages/
 
@@ -261,7 +265,7 @@ jobs:
       - name: Organize files
         id: organize
         run: |
-          cd openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH}/targets/mediatek/filogic;
+          cd ${BUILD_DIR}/targets/mediatek/filogic;
           rm -rf packages
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "NOW=$(date +%F-%H%M)" >> $GITHUB_ENV
