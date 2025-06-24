@@ -197,9 +197,11 @@ jobs:
             git config --global user.email 'actions@github.com'
 
             cd $GITHUB_WORKSPACE;
+            rm -f packages-output-openwrt-snapshot-pesa1234
 
             cp -v ${BUILD_DIR}/targets/*/*/packages/* ${PACKAGES_OUT} || true
-            ln -sf ${PACKAGES_OUT} packages-output-openwrt-snapshot-pesa1234 || true
+            ln -sfv "$(pwd)/${PACKAGES_OUT}" packages-output-openwrt-snapshot-pesa1234 || true
+            ls -l packages-output-openwrt-snapshot-pesa1234 || true
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
