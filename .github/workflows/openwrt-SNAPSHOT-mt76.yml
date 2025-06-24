@@ -180,7 +180,7 @@ jobs:
 
       - name: Deploy and archive packages
         run: |
-          BUILD_DIR=$(ls -d openwrt/bin/$(date +"%Y-%m-%d")_*_${REPO_BRANCH})
+          BUILD_DIR=$(ls -d openwrt/bin/$(date +"%Y-%m-%d")_*)
           echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
           echo "Actual build path: $BUILD_DIR"
 
