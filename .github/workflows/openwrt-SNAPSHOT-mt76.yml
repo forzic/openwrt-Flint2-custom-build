@@ -200,7 +200,7 @@ jobs:
             rm -f packages-output-openwrt-snapshot-pesa1234
 
             cp -v ${BUILD_DIR}/targets/*/*/packages/* ${PACKAGES_OUT} || true
-            ln -sfv "$(pwd)/${PACKAGES_OUT}" packages-output-openwrt-snapshot-pesa1234 || true
+            ln -sfv "${PACKAGES_OUT}" packages-output-openwrt-snapshot-pesa1234 || true
             ls -l packages-output-openwrt-snapshot-pesa1234 || true
 
             # Create README with version info
