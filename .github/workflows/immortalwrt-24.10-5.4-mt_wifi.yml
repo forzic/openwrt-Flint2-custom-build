@@ -1,16 +1,13 @@
-name: OpenWRT SNAPSHOT Firmware mt76 driver (pesa1234)
+name: ImmortalWRT 24.10 Firmware mt_wifi driver (padavanonly)
 
 on:
-  repository_dispatch:
   workflow_dispatch:
-  schedule:
-    - cron: '0 5 * * 0'
 
 env:
-  REPO_URL: https://github.com/pesa1234/openwrt.git
-  REPO_BRANCH: next-r4.6.4.rss.mtk
-  OpenWRTDevice: Flint2_GL-MT6000
-  CONFIG_FILE: config.openwrt-snapshot-pesa1234
+  REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-24.10.git
+  REPO_BRANCH: 2410
+  ImmortalWRTDevice: Flint2_GL-MT6000
+  CONFIG_FILE: config.immortalwrt-2410-5.4-padavanonly
   TZ: Europe/Kyiv
 
 jobs:
@@ -42,12 +39,12 @@ jobs:
           sudo chown $USER:$GROUPS /workdir
           df -h
 
-      - name: Set up OpenWRT Environment
+      - name: Set up ImmortalWrt Environment
         working-directory: /workdir
         run: |
           df -hT $PWD
           git clone --branch $REPO_BRANCH $REPO_URL
-          ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+          ln -sf /workdir/immortalwrt-mt798x-24.10 $GITHUB_WORKSPACE/immortalwrt-mt798x-24.10
 
       - name: Setup Build Environment
         run: |
@@ -84,14 +81,15 @@ jobs:
 
       - name: Update & Install Feeds
         run: |
-          cd openwrt
+          cd immortalwrt-mt798x-24.10
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       - name: Configure Firmware
         run: |
-          cp $CONFIG_FILE openwrt/.config
-          cd openwrt
+          cp 903-fix-nft-reject-bridge.patch immortalwrt-mt798x-24.10/target/linux/generic/backport-5.4
+          cp $CONFIG_FILE immortalwrt-mt798x-24.10/.config
+          cd immortalwrt-mt798x-24.10
           perl --version
           cat target/linux/mediatek/Makefile | grep KERNEL
           head -n 200 scripts/kconfig.pl
@@ -100,40 +98,37 @@ jobs:
 
       - name: Extract Version Information
         run: |
-          cd openwrt
+          cd immortalwrt-mt798x-24.10
 
-          # Extract OpenWRT version from the source
-          OpenWRT_VERSION="SNAPSHOT"
+          # Extract ImmortalWRT version from the source
+          IMMORTALWRT_VERSION="24.10-SNAPSHOT"
 
           # Extract kernel version from target configuration
           KERNEL_VERSION=""
+          KERNEL_VERSION=$(grep -m1 'KERNEL' target/linux/mediatek/Makefile | cut -d= -f2 | tr -d ' ')
 
           if [ -z "$KERNEL_VERSION" ]; then
-            if grep 'HAS_TESTING_KERNEL=y' .config; then
-              KERNEL_VERSION=$(grep -m1 "KERNEL_TESTING_PATCHVER:" target/linux/mediatek/Makefile 2>/dev/null | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
-            else
-              KERNEL_VERSION=$(grep -m1 "KERNEL_PATCHVER:" target/linux/mediatek/Makefile 2>/dev/null | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
-            fi
+            KERNEL_VERSION=$(grep -m1 "LINUX_VERSION-" include/kernel-version.mk 2>/dev/null | cut -d= -f2 | tr -d ' ' | cut -d. -f1-2)
           fi
 
           # Set default values if extraction fails
-          OpenWRT_VERSION=${OpenWRT_VERSION:-"SNAPSHOT"}
-          KERNEL_VERSION=${KERNEL_VERSION:-"6.12"}
+          IMMORTALWRT_VERSION=${IMMORTALWRT_VERSION:-"24.10-dev"}
+          KERNEL_VERSION=${KERNEL_VERSION:-"5.4"}
 
           # Clean up version strings
-          OpenWRT_VERSION=$(echo "$OpenWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
+          IMMORTALWRT_VERSION=$(echo "$IMMORTALWRT_VERSION" | sed 's/[^a-zA-Z0-9.-]//g')
           KERNEL_VERSION=$(echo "$KERNEL_VERSION" | sed 's/[^0-9.]//g')
 
           # Export to environment
-          echo "OpenWRT_VERSION=$OpenWRT_VERSION" >> $GITHUB_ENV
+          echo "IMMORTALWRT_VERSION=$IMMORTALWRT_VERSION" >> $GITHUB_ENV
           echo "KERNEL_VERSION=$KERNEL_VERSION" >> $GITHUB_ENV
 
-          echo "Extracted OpenWRT Version: $OpenWRT_VERSION"
+          echo "Extracted ImmortalWRT Version: $IMMORTALWRT_VERSION"
           echo "Extracted Kernel Version: $KERNEL_VERSION"
 
       - name: Set target directory variables
         run: |
-          cd openwrt
+          cd immortalwrt-mt798x-24.10
 
           # Set DATE variable for deployment path
           echo "DATE=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_ENV
@@ -149,67 +144,69 @@ jobs:
       - name: Create target deploy dirs
         run: |
           # Create versioned directory name
-          PACKAGES_DIR_NAME="${DATE}_openwrt_${VERSION_CODE}_${OPENWRT_VERSION}-kernel-${KERNEL_VERSION}"
-          TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' openwrt/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' openwrt/.config | cut -d= -f2 | tr -d '\"')"
-          PACKAGES_OUT="${PACKAGES_DIR_NAME}/targets/${TARGET_PKG_DIR}/packages"
-          mkdir -p "${PACKAGES_OUT}"
-
-          echo "PACKAGES_DIR_NAME=$PACKAGES_DIR_NAME" >> $GITHUB_ENV
-          echo "TARGET_PKG_DIR=$TARGET_PKG_DIR" >> $GITHUB_ENV
-          echo "PACKAGES_OUT=$PACKAGES_OUT" >> $GITHUB_ENV
+          PACKAGES_DIR_NAME="${DATE}_immortalwrt_${VERSION_CODE}_${IMMORTALWRT_VERSION}-kernel-${KERNEL_VERSION}" >> $GITHUB_ENV
+          TARGET_PKG_DIR="$(grep '^CONFIG_TARGET_BOARD=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')/$(grep '^CONFIG_TARGET_SUBTARGET=' immortalwrt-mt798x-24.10/.config | cut -d= -f2 | tr -d '\"')" >> $GITHUB_ENV
+          PACKAGES_OUT="$PACKAGES_DIR_NAME/targets/$TARGET_PKG_DIR/packages" >> $GITHUB_ENV
+          mkdir -p "$PACKAGES_OUT"
 
       - name: Patch feeds.mk for custom package repository
         run: |
-          cd openwrt
+          cd immortalwrt-mt798x-24.10
+          # Add the new variables at the top after the -include line
+          sed -i '/^-include $(TMP_DIR)\/.packageauxvars$/a\\nIWRT_OPKG_LINK:=https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT\nOWRT_APK_LINK:=https://downloads.openwrt.org/snapshots/packages' include/feeds.mk
+          # Update OPKG core package path
+          sed -i "s|echo 'src/gz %d_core %U/targets/%S/packages';|echo 'src/gz %d_core %U/\${PACKAGES_OUT}';|" include/feeds.mk
+          # Update OPKG base package path
+          sed -i "s|echo 'src/gz %d_base %U/packages/%A/base';|echo 'src/gz %d_base \${IWRT_OPKG_LINK}/packages/%A/base';|" include/feeds.mk
+          # Update OPKG feed package paths
+          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) %U/packages/%A/\$(feed)';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )src/gz %d_\$(feed) \${IWRT_OPKG_LINK}/packages/%A/\$(feed)';|" include/feeds.mk
           # Update APK core package path
-          sed -i 's|echo '\''%U/$(DATE)_$(VERSION_CODE)_$(BRANCH)/targets/%S/packages/packages.adb'\'';|echo '\''%U/\\{{ env.PACKAGES_OUT }}/packages.adb'\'';|' include/feeds.mk
+          sed -i "s|echo '%U/targets/%S/packages/packages.adb';|echo '%U/\${PACKAGES_OUT}/packages.adb';|" include/feeds.mk
+          # Update APK base package path
+          sed -i "s|echo '%U/packages/%A/base/packages.adb';|echo '\${OWRT_APK_LINK}/%A/base/packages.adb';|" include/feeds.mk
+          # Update APK feed package paths
+          sed -i "s|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )%U/packages/%A/\$(feed)/packages.adb';|echo '\$(if \$(filter m,\$(CONFIG_FEED_\$(feed))),# )\${OWRT_APK_LINK}/%A/\$(feed)/packages.adb';|" include/feeds.mk
           echo "feeds.mk patched successfully"
 
       - name: Download Sources
         run: |
-          cd openwrt
+          cd immortalwrt-mt798x-24.10
           make download -j$(nproc) || { echo "Download failed"; exit 1; }
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
       - name: Build Firmware
         run: |
-          cd openwrt
+          cd immortalwrt-mt798x-24.10
           echo -e "$(nproc) thread compile"
           make -j$(nproc) || make -j1 V=s
 
       - name: Deploy and archive packages
         run: |
-          BUILD_DIR=$(ls -d openwrt/bin/$(date +"%Y-%m-%d")_*)
-          echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
-          echo "Actual build path: $BUILD_DIR"
-
-          ls ${BUILD_DIR}/targets/*/*
-          cd ${BUILD_DIR}/targets/mediatek/filogic;
+          ls immortalwrt-mt798x-24.10/bin/targets/*/*
+          cd immortalwrt-mt798x-24.10/bin/targets/*/*
 
           if [ -d "packages" ]; then
             echo "Found packages directory, processing..."
 
-            PACKAGE_COUNT=$(find packages -name "*.apk" | wc -l)
-            echo "Found $PACKAGE_COUNT .apk packages"
+            PACKAGE_COUNT=$(find packages -name "*.ipk" | wc -l)
+            echo "Found $PACKAGE_COUNT .ipk packages"
 
             git config --global user.name 'OpenWRT Build Bot'
             git config --global user.email 'actions@github.com'
 
-            cd $GITHUB_WORKSPACE;
-            rm -f packages-output-openwrt-snapshot-pesa1234
+            cd $GITHUB_WORKSPACE
 
-            cp -v ${BUILD_DIR}/targets/*/*/packages/* ${PACKAGES_OUT} || true
-            ln -sfv "${PACKAGES_OUT}" packages-output-openwrt-snapshot-pesa1234 || true
-            ls -l packages-output-openwrt-snapshot-pesa1234 || true
+            cp -r immortalwrt-mt798x-24.10/bin/targets/*/*/packages/* "$PACKAGES_OUT"
+            ln -sf "$PACKAGES_OUT" packages-output-immortalwrt-2410-padavanonly
 
             # Create README with version info
             cat > "$PACKAGES_DIR_NAME/README.md" << 'EOF'
-          # OpenWRT Packages
+          # ImmortalWRT Packages
 
           **Generated on:** ${{ env.DATE }}
-          **Device:** ${{ env.OpenWRTDevice }}
-          **OpenWRT Version:** ${{ env.OpenWRT_VERSION }}
+          **Device:** ${{ env.ImmortalWRTDevice }}
+          **ImmortalWRT Version:** ${{ env.IMMORTALWRT_VERSION }}
           **Kernel Version:** ${{ env.KERNEL_VERSION }}
           **Source Branch:** ${{ env.REPO_BRANCH }}
           **Deploy Path:** ${{ env.PACKAGES_DIR_NAME }}
@@ -228,7 +225,7 @@ jobs:
           EOF
 
             # Add package list to README
-            find "$PACKAGES_DIR_NAME" -name "*.apk" -type f | sort | while read -r pkg; do
+            find "$PACKAGES_DIR_NAME" -name "*.ipk" -type f | sort | while read -r pkg; do
               PKG_NAME=$(basename "$pkg")
               PKG_SIZE=$(du -h "$pkg" | cut -f1)
               echo "- $PKG_NAME ($PKG_SIZE)" >> "$PACKAGES_DIR_NAME/README.md"
@@ -237,10 +234,10 @@ jobs:
             git pull origin ${{ github.ref_name }} --rebase --autostash
 
             git add "$PACKAGES_DIR_NAME/"
-            git add packages-output-openwrt-snapshot-pesa1234
+            git add packages-output-immortalwrt-2410-padavanonly
 
             if ! git diff --staged --quiet; then
-              git commit -m "Update packages ($PACKAGE_COUNT .apk files) - OpenWRT ${OpenWRT_VERSION} / Kernel ${KERNEL_VERSION}"
+              git commit -m "Update packages ($PACKAGE_COUNT .ipk files) - ImmortalWRT ${IMMORTALWRT_VERSION} / Kernel ${KERNEL_VERSION}"
               git push origin ${{ github.ref_name }}
               echo "Successfully deployed $PACKAGE_COUNT packages"
             else
@@ -248,8 +245,8 @@ jobs:
             fi
 
             # Create archive
-            cd ${BUILD_DIR}/targets/mediatek/filogic;
-            PACKAGES_ARCHIVE="openwrt-packages-${DATE}-v${OpenWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
+            cd immortalwrt-mt798x-24.10/bin/targets/*/*
+            PACKAGES_ARCHIVE="immortalwrt-packages-${DATE}-v${IMMORTALWRT_VERSION}-k${KERNEL_VERSION}.tar.gz"
             tar -czf "$PACKAGES_ARCHIVE" packages/
 
             echo "PACKAGES_ARCHIVE=$PACKAGES_ARCHIVE" >> $GITHUB_ENV
@@ -267,7 +264,7 @@ jobs:
       - name: Organize files
         id: organize
         run: |
-          cd ${BUILD_DIR}/targets/mediatek/filogic;
+          cd immortalwrt-mt798x-24.10/bin/targets/*/*
           rm -rf packages
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "NOW=$(date +%F-%H%M)" >> $GITHUB_ENV
@@ -280,19 +277,19 @@ jobs:
       - name: Build RelTag
         id: BuildRelTag
         run: |
-          echo "RelTag=${{ env.NOW }}_OpenWRT-${{ env.OpenWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.OpenWRTDevice }}" >> $GITHUB_ENV
+          echo "RelTag=${{ env.NOW }}_ImmortalWRT-${{ env.IMMORTALWRT_VERSION }}_Kernel-${{ env.KERNEL_VERSION }}_${{ env.ImmortalWRTDevice }}" >> $GITHUB_ENV
 
       - name: Upload firmware to github
         uses: actions/upload-artifact@v4
         with:
-          name: OpenWrt_firmware-${{ env.OpenWRTDevice }}-${{ env.OpenWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
+          name: ImmortalWrt_firmware-${{ env.ImmortalWRTDevice }}-${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}
 
       - name: Upload packages archive as artifact
         if: env.PACKAGES_CREATED == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: OpenWRT_packages-${{ env.OpenWRTDevice }}-${{ env.OpenWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
+          name: ImmortalWrt_packages-${{ env.ImmortalWRTDevice }}-${{ env.IMMORTALWRT_VERSION }}-k${{ env.KERNEL_VERSION }}-${{ env.NOW }}
           path: ${{ env.FIRMWARE }}/${{ env.PACKAGES_ARCHIVE }}
 
       - name: Create a release
