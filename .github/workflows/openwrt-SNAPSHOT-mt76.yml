@@ -162,7 +162,7 @@ jobs:
         run: |
           cd openwrt
           # Update APK core package path
-          sed -i 's|echo '\''%U/$(DATE)_$(VERSION_CODE)_$(BRANCH)/targets/%S/packages/packages.adb'\'';|echo '\''%U/\\{{ env.PACKAGES_OUT }}/packages.adb'\'';|' include/feeds.mk
+          sed -i "s|echo '%U/\$(DATE)_\$(VERSION_CODE)_\$(BRANCH)/targets/%S/packages/packages.adb';|echo '%U/${PACKAGES_OUT}/packages.adb';|" include/feeds.mk
           echo "feeds.mk patched successfully"
 
       - name: Download Sources
