@@ -43,7 +43,7 @@ jobs:
         working-directory: /workdir
         run: |
           df -hT $PWD
-          git clone --branch $REPO_BRANCH $REPO_URL
+          git clone --branch $REPO_BRANCH $REPO_URL immortalwrt-mt798x-24.10
           ln -sf /workdir/immortalwrt-mt798x-24.10 $GITHUB_WORKSPACE/immortalwrt-mt798x-24.10
 
       - name: Setup Build Environment
