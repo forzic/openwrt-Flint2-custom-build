@@ -1,4 +1,4 @@
-name: ImmortalWRT 24.10 Firmware mt_wifi driver (padavanonly)
+name: ImmortalWRT 24.10 Linux 5.4 Firmware mt_wifi driver (padavanonly)
 
 on:
   workflow_dispatch:
