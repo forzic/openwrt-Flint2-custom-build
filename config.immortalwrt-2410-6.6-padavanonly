@@ -4077,7 +4077,7 @@ CONFIG_PACKAGE_kmod-usb-net-huawei-cdc-ncm=m
 CONFIG_PACKAGE_kmod-usb-net-ipheth=m
 CONFIG_PACKAGE_kmod-usb-net-kalmia=m
 CONFIG_PACKAGE_kmod-usb-net-kaweth=m
-CONFIG_PACKAGE_kmod-usb-net-lan78xx=m
+# CONFIG_PACKAGE_kmod-usb-net-lan78xx is not set
 CONFIG_PACKAGE_kmod-usb-net-mcs7830=m
 CONFIG_PACKAGE_kmod-usb-net-pegasus=m
 CONFIG_PACKAGE_kmod-usb-net-pl=m
