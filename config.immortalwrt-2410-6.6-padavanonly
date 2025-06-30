@@ -3711,7 +3711,7 @@ CONFIG_PACKAGE_kmod-igc=m
 CONFIG_PACKAGE_kmod-ipvlan=m
 CONFIG_PACKAGE_kmod-ixgbe=m
 CONFIG_PACKAGE_kmod-ixgbevf=m
-CONFIG_PACKAGE_kmod-lan743x=m
+# CONFIG_PACKAGE_kmod-lan743x is not set
 CONFIG_PACKAGE_kmod-libphy=y
 CONFIG_PACKAGE_kmod-macvlan=y
 CONFIG_PACKAGE_kmod-mdio-devres=m
